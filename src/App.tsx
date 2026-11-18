@@ -8,6 +8,7 @@ import {
   ArrowUpRight,
   Bell,
   Box,
+  Shirt,
   Car,
   Check,
   CheckCheck,
@@ -50,13 +51,17 @@ import { providers } from './providers';
 import { useAppUpdates } from './useAppUpdates';
 import { UpdateSettings, UpdatePrompt } from './AppUpdates';
 import InstalledMods, { inventoryCounts } from './InstalledMods';
+import OrganizationPage from './OrganizationPage';
+import { emptyOrganization, type OrganizationSnapshot } from './organizationTypes';
 import type { Backup, Game, Mod, Plan, Report, Snapshot, ScanInventory } from './types';
 
-type View = 'dashboard' | 'installed' | 'library' | 'game' | 'backups' | 'discover' | 'settings';
+type View =
+  'dashboard' | 'installed' | 'library' | 'suits' | 'game' | 'backups' | 'discover' | 'settings';
 const nav = [
   { id: 'dashboard', label: 'Overview', icon: LayoutDashboard },
   { id: 'installed', label: 'Installed Mods', icon: PackageCheck },
   { id: 'library', label: 'My library', icon: Library },
+  { id: 'suits', label: 'Suits & Skins', icon: Shirt },
   { id: 'discover', label: 'Discover mods', icon: Sparkles },
   { id: 'game', label: 'Game & dependencies', icon: Gamepad2 },
   { id: 'backups', label: 'Backups & recovery', icon: Archive },
@@ -189,6 +194,29 @@ export default function App() {
     backup_bytes: 0,
   });
   const [view, setView] = useState<View>('dashboard');
+  const [libraryMode, setLibraryMode] = useState<'collections' | 'individual'>('collections');
+  const [organization, setOrganization] = useState<OrganizationSnapshot>(emptyOrganization);
+  const [organizationLoading, setOrganizationLoading] = useState(false);
+  const [organizationError, setOrganizationError] = useState<string | null>(null);
+  const organizationRequest = useRef(0);
+  const refreshOrganization = useCallback(async () => {
+    const request = ++organizationRequest.current;
+    setOrganizationLoading(true);
+    try {
+      const value = await call<OrganizationSnapshot>('organization_snapshot');
+      if (request === organizationRequest.current) {
+        setOrganization(value);
+        setOrganizationError(null);
+      }
+    } catch (error) {
+      if (request === organizationRequest.current) setOrganizationError(String(error));
+    } finally {
+      if (request === organizationRequest.current) setOrganizationLoading(false);
+    }
+  }, []);
+  useEffect(() => {
+    if (view === 'library' || view === 'suits') void refreshOrganization();
+  }, [view, data.mods, data.inventory, refreshOrganization]);
   const [query, setQuery] = useState('');
   const [category, setCategory] = useState('All categories');
   const [filter, setFilter] = useState('all');
@@ -333,6 +361,16 @@ export default function App() {
       setSelected(null);
     });
   }
+  async function suitOperation(id: string, operation: string) {
+    await task(async () => {
+      const next = await call<Plan>('prepare_suit', { id, operation });
+      setPlan(next);
+      setApproved(false);
+      setReviewed(false);
+      setOwnershipReviewed(false);
+      setSelected(null);
+    });
+  }
   async function restore(backup: Backup) {
     await task(async () => {
       const next = await call<Plan>('prepare_restore', { id: backup.id });
@@ -366,7 +404,7 @@ export default function App() {
         token: plan.token,
         approved,
         compatibilityReviewed: reviewed,
-        ...(plan.operation === 'adopt' ? { ownershipReviewed } : {}),
+        ...(plan.operation === 'adopt' || plan.independent_scope ? { ownershipReviewed } : {}),
       });
       setPlan(null);
       await refresh();
@@ -660,13 +698,15 @@ export default function App() {
                     ? 'Discover existing ASI, script, RAGE, and OpenIV files without changing your game.'
                     : view === 'library'
                       ? 'Every archive, dependency, and tracked file. All under your control.'
-                      : view === 'backups'
-                        ? 'A clear history of every change, with a way back.'
-                        : view === 'discover'
-                          ? 'Find your next favorite. Download from the creator, then import it here.'
-                          : view === 'game'
-                            ? 'Start with the right edition and the right tools.'
-                            : 'A lightweight workspace that keeps your records on this PC.'}
+                      : view === 'suits'
+                        ? 'Inspect character resources, organize outfits and review supported installation changes.'
+                        : view === 'backups'
+                          ? 'A clear history of every change, with a way back.'
+                          : view === 'discover'
+                            ? 'Find your next favorite. Download from the creator, then import it here.'
+                            : view === 'game'
+                              ? 'Start with the right edition and the right tools.'
+                              : 'A lightweight workspace that keeps your records on this PC.'}
               </p>
             </div>
             <button className="button primary" onClick={() => void importMod()} disabled={busy}>
@@ -876,6 +916,40 @@ export default function App() {
             />
           )}
           {view === 'library' && (
+            <div className="org-library-tabs" role="tablist" aria-label="Library organization">
+              <button
+                className="button"
+                role="tab"
+                aria-selected={libraryMode === 'collections'}
+                onClick={() => setLibraryMode('collections')}
+              >
+                Collections
+              </button>
+              <button
+                className="button"
+                role="tab"
+                aria-selected={libraryMode === 'individual'}
+                onClick={() => setLibraryMode('individual')}
+              >
+                Individual mods
+              </button>
+            </div>
+          )}
+          {(view === 'suits' || (view === 'library' && libraryMode === 'collections')) && (
+            <OrganizationPage
+              key={view}
+              mode={view === 'suits' ? 'suits' : 'collections'}
+              data={organization}
+              loading={organizationLoading}
+              error={organizationError}
+              busy={busy || updates.active}
+              onRefresh={refreshOrganization}
+              onBusy={setBusy}
+              onReviewSuit={(id, op) => void suitOperation(id, op)}
+              onParent={(id) => setSelected(data.mods.find((m) => m.id === id) ?? null)}
+            />
+          )}
+          {view === 'library' && libraryMode === 'individual' && (
             <section className="panel">
               <div className="library-controls">
                 <label className="search-box">
@@ -1223,7 +1297,7 @@ export default function App() {
               Built for single-player. Designed to keep you in control.
             </span>
             <span>
-              ZOXRYN MODS <b>PHASE 1.5</b>
+              ZOXRYN MODS <b>PHASE 1.7</b>
             </span>
           </footer>
         </main>
@@ -1435,16 +1509,16 @@ export default function App() {
                 </p>
               ))}
               <div className="approval-box">
-                {plan.operation === 'adopt' && (
+                {(plan.operation === 'adopt' || plan.independent_scope) && (
                   <label>
                     <input
                       type="checkbox"
                       checked={ownershipReviewed}
                       onChange={(e) => setOwnershipReviewed(e.target.checked)}
                     />
-                    I confirmed the complete listed entrypoint is independent, is not shared by
-                    other mods, and needs no unlisted companion-file management. If uncertain, I
-                    will cancel.
+                    {plan.independent_scope
+                      ? 'I checked the author’s instructions and confirmed this complete suit package is independent, is not required by other mods, and needs no unlisted resources or registration edits. If uncertain, I will cancel.'
+                      : 'I confirmed the complete listed entrypoint is independent, is not shared by other mods, and needs no unlisted companion-file management. If uncertain, I will cancel.'}
                   </label>
                 )}
                 <label>
@@ -1480,7 +1554,7 @@ export default function App() {
                   !approved ||
                   !reviewed ||
                   plan.blockers.length > 0 ||
-                  (plan.operation === 'adopt' && !ownershipReviewed)
+                  ((plan.operation === 'adopt' || !!plan.independent_scope) && !ownershipReviewed)
                 }
                 onClick={() => void apply()}
               >

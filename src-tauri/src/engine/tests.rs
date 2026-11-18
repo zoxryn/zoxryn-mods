@@ -2,6 +2,8 @@ use super::*;
 use std::io::Write;
 use tempfile::TempDir;
 use zip::{write::SimpleFileOptions, CompressionMethod, ZipWriter};
+#[path = "organization_tests.rs"]
+mod organization;
 #[path = "phase15_tests.rs"]
 mod phase15;
 #[path = "updater_tests.rs"]

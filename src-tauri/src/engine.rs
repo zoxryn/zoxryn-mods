@@ -48,6 +48,7 @@ struct Pending {
     record: ModRecord,
     restore: Option<Journal>,
     adoption: Option<DiscoveredMod>,
+    suit_id: Option<String>,
 }
 
 pub struct Engine {
@@ -75,11 +76,20 @@ impl Engine {
             .context("Zoxryn Mods is already running with this data folder")?;
         let db = Connection::open(data.join("zoxryn.sqlite3"))?;
         let schema: i64 = db.query_row("PRAGMA user_version", [], |r| r.get(0))?;
-        if schema > 2 {
+        if schema > 3 {
             bail!("This database was created by a newer Zoxryn Mods version. Downgrading is blocked to preserve records.");
         }
-        db.execute_batch("PRAGMA journal_mode=WAL; PRAGMA synchronous=FULL; CREATE TABLE IF NOT EXISTS settings(key TEXT PRIMARY KEY, value TEXT NOT NULL); CREATE TABLE IF NOT EXISTS mods(id TEXT PRIMARY KEY, json TEXT NOT NULL); CREATE TABLE IF NOT EXISTS owned(game TEXT COLLATE NOCASE, target TEXT COLLATE NOCASE, mod_id TEXT NOT NULL, json TEXT NOT NULL, PRIMARY KEY(game,target)); CREATE TABLE IF NOT EXISTS journals(id TEXT PRIMARY KEY, status TEXT NOT NULL, json TEXT NOT NULL);")?;
-        db.execute_batch("CREATE TABLE IF NOT EXISTS scan_runs(game TEXT COLLATE NOCASE PRIMARY KEY,json TEXT NOT NULL); CREATE TABLE IF NOT EXISTS external_mods(game TEXT COLLATE NOCASE,id TEXT,json TEXT NOT NULL,PRIMARY KEY(game,id)); PRAGMA user_version=2;")?;
+        if schema < 3 && db.query_row("SELECT count(*) FROM sqlite_master WHERE type='table' AND name NOT LIKE 'sqlite_%'",[],|r|r.get::<_,i64>(0))?>0 {
+            let dir = data.join("schema-migrations");
+            let _guard = guard_tree(&dir, true)?;
+            let backup = dir.join(format!(
+                "schema-{schema}-to-3-{}.sqlite3",
+                uuid::Uuid::new_v4()
+            ));
+            db.execute("VACUUM INTO ?", [backup.to_string_lossy().as_ref()])?;
+            File::options().write(true).open(&backup)?.sync_all()?;
+        }
+        db.execute_batch("PRAGMA journal_mode=WAL; PRAGMA synchronous=FULL; PRAGMA foreign_keys=ON; BEGIN IMMEDIATE; CREATE TABLE IF NOT EXISTS settings(key TEXT PRIMARY KEY, value TEXT NOT NULL); CREATE TABLE IF NOT EXISTS mods(id TEXT PRIMARY KEY, json TEXT NOT NULL); CREATE TABLE IF NOT EXISTS owned(game TEXT COLLATE NOCASE, target TEXT COLLATE NOCASE, mod_id TEXT NOT NULL, json TEXT NOT NULL, PRIMARY KEY(game,target)); CREATE TABLE IF NOT EXISTS journals(id TEXT PRIMARY KEY, status TEXT NOT NULL, json TEXT NOT NULL); CREATE TABLE IF NOT EXISTS scan_runs(game TEXT COLLATE NOCASE PRIMARY KEY,json TEXT NOT NULL); CREATE TABLE IF NOT EXISTS external_mods(game TEXT COLLATE NOCASE,id TEXT,json TEXT NOT NULL,PRIMARY KEY(game,id)); CREATE TABLE IF NOT EXISTS collections(id TEXT PRIMARY KEY,json TEXT NOT NULL); CREATE TABLE IF NOT EXISTS collection_members(collection_id TEXT NOT NULL REFERENCES collections(id) ON DELETE CASCADE,kind TEXT NOT NULL,item_id TEXT NOT NULL,PRIMARY KEY(collection_id,kind,item_id)); CREATE TABLE IF NOT EXISTS visual_metadata(kind TEXT NOT NULL,item_id TEXT NOT NULL,json TEXT NOT NULL,PRIMARY KEY(kind,item_id)); PRAGMA user_version=3; COMMIT;")?;
         for dir in ["archives", "blobs", "journals"] {
             fs::create_dir_all(data.join(dir))?;
         }
@@ -143,7 +153,7 @@ impl Engine {
         let folder = self.data.join("app-update-backups");
         let _guard = guard_tree(&folder, true)?;
         let backup = folder.join(format!(
-            "schema-2-before-update-{}.sqlite3",
+            "schema-3-before-update-{}.sqlite3",
             uuid::Uuid::new_v4()
         ));
         self.db
@@ -251,6 +261,11 @@ impl Engine {
             .join(format!("{}.{}", record.id, ext));
         copy_verified(path, &dest, &record.archive_hash)?;
         record.archive_path = dest.to_string_lossy().into();
+        if let Err(error) = self.import_package_previews(&record) {
+            record
+                .warnings
+                .push(format!("Preview unavailable: {error}"));
+        }
         self.save_record(&record)?;
         Ok(record)
     }
@@ -311,7 +326,10 @@ impl Engine {
             backups,
             recovery,
             data_path: self.data.to_string_lossy().into(),
-            storage_bytes: archive_bytes + backup_bytes + database_bytes,
+            storage_bytes: archive_bytes
+                + backup_bytes
+                + database_bytes
+                + directory_bytes("thumbnails"),
             archive_bytes,
             backup_bytes,
             inventory: self.inventory()?,
@@ -327,6 +345,7 @@ impl Engine {
             token: uuid::Uuid::new_v4().to_string(),
             mod_id: id.into(),
             operation: operation.into(),
+            independent_scope: None,
             game: game.clone(),
             files: Vec::new(),
             blockers: self.recovery.clone(),
@@ -511,6 +530,7 @@ impl Engine {
                 record,
                 restore: None,
                 adoption: None,
+                suit_id: None,
             },
         );
         Ok(plan)
@@ -581,7 +601,7 @@ impl Engine {
                 after_hash: c.before_hash.clone(),
             });
         }
-        let plan = Plan { token:uuid::Uuid::new_v4().to_string(), mod_id:record.id.clone(), operation:"restore".into(), game, files, blockers, warnings:vec!["Restores the tracked file and mod state immediately before this operation. Other untracked changes are not covered.".into()] };
+        let plan = Plan { token:uuid::Uuid::new_v4().to_string(), mod_id:record.id.clone(), operation:"restore".into(), independent_scope:None, game, files, blockers, warnings:vec!["Restores the tracked file and mod state immediately before this operation. Other untracked changes are not covered.".into()] };
         self.pending.clear();
         self.pending.insert(
             plan.token.clone(),
@@ -590,6 +610,7 @@ impl Engine {
                 record,
                 restore: Some(j),
                 adoption: None,
+                suit_id: None,
             },
         );
         Ok(plan)
@@ -612,7 +633,7 @@ impl Engine {
             bail!("There are no tracked installed mods in this game folder");
         }
         let token = uuid::Uuid::new_v4().to_string();
-        let plan = Plan { token:token.clone(), mod_id:"tracked-clean-state".into(), operation:"clean".into(), game, files:plans.iter().flat_map(|p|p.files.clone()).collect(), blockers:plans.iter().flat_map(|p|p.blockers.clone()).collect(), warnings:vec!["Restores originals or removes tracked files for Zoxryn-installed mods in this game folder. Adopted external entrypoints are excluded; manage them in Installed Mods. Archives, backups, and untracked files are retained.".into(), "Each mod has its own recoverable transaction. An interruption can leave some mods already removed; remaining records stay accurate.".into()] };
+        let plan = Plan { token:token.clone(), mod_id:"tracked-clean-state".into(), operation:"clean".into(), independent_scope:None, game, files:plans.iter().flat_map(|p|p.files.clone()).collect(), blockers:plans.iter().flat_map(|p|p.blockers.clone()).collect(), warnings:vec!["Restores originals or removes tracked files for Zoxryn-installed mods in this game folder. Adopted external entrypoints are excluded; manage them in Installed Mods. Archives, backups, and untracked files are retained.".into(), "Each mod has its own recoverable transaction. An interruption can leave some mods already removed; remaining records stay accurate.".into()] };
         self.pending.clear();
         self.batches.clear();
         self.batches.insert(token, plans);
@@ -699,10 +720,10 @@ impl Engine {
         if self
             .pending
             .get(token)
-            .is_some_and(|p| p.adoption.is_some())
+            .is_some_and(|p| p.adoption.is_some() || p.suit_id.is_some())
             && !ownership_reviewed
         {
-            bail!("Explicit independent-file ownership confirmation is required for adoption");
+            bail!("Explicit independent-file ownership and registration confirmation is required");
         }
         let pending = self
             .pending
@@ -735,7 +756,11 @@ impl Engine {
                 bail!("Backup state changed; review a new plan");
             }
         } else {
-            let fresh = self.prepare(&plan.mod_id, &plan.operation)?;
+            let fresh = if let Some(suit) = &pending.suit_id {
+                self.prepare_suit(suit, &plan.operation)?
+            } else {
+                self.prepare(&plan.mod_id, &plan.operation)?
+            };
             if !fresh.blockers.is_empty()
                 || serde_json::to_string(&fresh.files)? != serde_json::to_string(&plan.files)?
                 || fresh.game.path != plan.game.path
@@ -1045,5 +1070,6 @@ impl Engine {
 }
 
 mod inventory;
+mod organization;
 #[cfg(test)]
 mod tests;

@@ -41,7 +41,7 @@ fn update_checkpoint_preserves_settings_records_archives_and_backups() {
     assert_eq!(
         copy.query_row("PRAGMA user_version", [], |r| r.get::<_, i64>(0))
             .unwrap(),
-        2
+        3
     );
     for table in [
         "settings",
@@ -50,6 +50,9 @@ fn update_checkpoint_preserves_settings_records_archives_and_backups() {
         "journals",
         "scan_runs",
         "external_mods",
+        "collections",
+        "collection_members",
+        "visual_metadata",
     ] {
         let sql = format!("SELECT * FROM {table} ORDER BY 1");
         let rows = |db: &Connection| {

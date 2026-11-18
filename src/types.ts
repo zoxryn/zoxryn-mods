@@ -124,6 +124,7 @@ export interface Plan {
   token: string;
   mod_id: string;
   operation: string;
+  independent_scope?: string | null;
   game: Game;
   files: {
     target: string;

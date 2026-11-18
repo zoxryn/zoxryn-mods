@@ -17,6 +17,8 @@ pub fn inspect<R: Read + Seek>(reader: &mut R, length: u64, budget: &mut u64) ->
         summary.state = "Unavailable".into();
         summary.categories.clear();
         summary.samples.clear();
+        summary.character_resources.clear();
+        summary.character_resources_truncated = false;
         summary.notes.push(format!("RPF inspection stopped: {e}"));
     }
     summary.notes.push("Resource names are clues, not individual mod identities or proof of replacement. Payloads and nested RPF contents were not read.".into());
@@ -147,7 +149,14 @@ fn parse<R: Read + Seek>(
                     *out.categories.entry(category.into()).or_default() += 1;
                 }
                 if out.samples.len() < 80 {
-                    out.samples.push(path);
+                    out.samples.push(path.clone());
+                }
+                if crate::organization::is_character_resource(&path) {
+                    if out.character_resources.len() < 256 {
+                        out.character_resources.push(path);
+                    } else {
+                        out.character_resources_truncated = true;
+                    }
                 }
             }
         }

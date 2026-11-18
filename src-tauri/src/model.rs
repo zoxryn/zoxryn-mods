@@ -50,6 +50,8 @@ pub struct ModRecord {
     pub adopted_from: Option<String>,
     #[serde(default = "zoxryn_source")]
     pub origin: String,
+    #[serde(default)]
+    pub organization: crate::organization::PackageOrganization,
 }
 fn zoxryn_source() -> String {
     "Zoxryn".into()
@@ -65,6 +67,7 @@ pub struct Manifest {
     pub edition: String,
     pub requirements: Vec<String>,
     pub supported_builds: Vec<String>,
+    pub organization: crate::organization::PackageOrganization,
 }
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct PlannedFile {
@@ -79,6 +82,8 @@ pub struct Plan {
     pub token: String,
     pub mod_id: String,
     pub operation: String,
+    #[serde(default)]
+    pub independent_scope: Option<String>,
     pub game: Game,
     pub files: Vec<PlannedFile>,
     pub blockers: Vec<String>,
@@ -127,6 +132,10 @@ pub struct RpfSummary {
     pub categories: std::collections::BTreeMap<String, u32>,
     pub samples: Vec<String>,
     pub notes: Vec<String>,
+    #[serde(default)]
+    pub character_resources: Vec<String>,
+    #[serde(default)]
+    pub character_resources_truncated: bool,
 }
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct DiscoveredMod {
@@ -147,6 +156,8 @@ pub struct DiscoveredMod {
     pub control_reason: String,
     pub managed_id: Option<String>,
     pub rpf: Option<RpfSummary>,
+    #[serde(default)]
+    pub character_models: Vec<String>,
 }
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct ManagedInstalled {

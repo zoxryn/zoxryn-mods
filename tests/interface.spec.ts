@@ -14,6 +14,7 @@ test('dashboard shows honest empty state and browser boundary', async ({ page })
 test('navigation and library search/filter work without fake mod records', async ({ page }) => {
   await page.goto('/');
   await page.getByRole('button', { name: 'My library' }).click();
+  await page.getByRole('tab', { name: 'Individual mods' }).click();
   await page.getByRole('textbox', { name: 'Search mods' }).fill('vehicle');
   await page.getByLabel('Category', { exact: true }).selectOption('Vehicles');
   await page.getByLabel('Mod status', { exact: true }).selectOption('enabled');

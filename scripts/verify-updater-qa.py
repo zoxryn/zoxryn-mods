@@ -11,7 +11,7 @@ assert (root / 'SYNTHETIC-UPDATER-QA').read_text().strip() == 'ZOXRYN-SYNTHETIC-
 
 def snapshot():
     files = {}
-    for name in ['Mock GTA V Legacy', 'downloads', 'data/archives', 'data/blobs', 'data/journals']:
+    for name in ['Mock GTA V Legacy', 'downloads', 'data/archives', 'data/blobs', 'data/journals', 'data/thumbnails']:
         for f in (root / name).rglob('*'):
             if f.is_file():
                 assert not f.is_symlink()
@@ -19,13 +19,18 @@ def snapshot():
                 files[f.relative_to(root).as_posix()] = {'sha256':hashlib.sha256(f.read_bytes()).hexdigest(),'bytes':stat.st_size,'mtime_ns':stat.st_mtime_ns}
     with sqlite3.connect(root / 'data/zoxryn.sqlite3') as db:
         tables = {t: db.execute(f'SELECT * FROM {t} ORDER BY 1,2').fetchall()
-                  for t in ['settings', 'mods', 'owned', 'journals', 'scan_runs', 'external_mods']}
+                  for t in ['settings', 'mods', 'owned', 'journals', 'scan_runs', 'external_mods', 'collections', 'collection_members', 'visual_metadata']}
         schema = db.execute('PRAGMA user_version').fetchone()[0]
         assert db.execute('PRAGMA integrity_check').fetchone()[0] == 'ok'
     return json.loads(json.dumps({'files': files, 'tables': tables, 'schema': schema}))
 
 if a.action == 'capture':
-    (root / 'baseline.json').write_text(json.dumps(snapshot(), indent=2))
+    baseline=snapshot()
+    assert baseline['schema']==3
+    assert len(baseline['tables']['collections'])==1 and len(baseline['tables']['collection_members'])==2
+    assert len(baseline['tables']['visual_metadata'])==1
+    assert any(name.startswith('data/thumbnails/') for name in baseline['files'])
+    (root / 'baseline.json').write_text(json.dumps(baseline, indent=2))
     print('Captured synthetic SQLite records and file hashes.')
 else:
     before = json.loads((root / 'baseline.json').read_text())

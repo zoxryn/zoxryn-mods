@@ -298,8 +298,8 @@ impl Engine {
                 });
             }
         }
-        let record=ModRecord{id:uuid::Uuid::new_v4().to_string(),name:candidate.name.clone(),author:"Unknown (external file)".into(),version:"Unknown".into(),category:candidate.category.clone(),source:format!("Existing {} file: {}",candidate.source,candidate.location),imported_at:now(),installed_at:None,status:"imported".into(),archive_path:String::new(),archive_hash:String::new(),kind:"Adopted entrypoint".into(),edition:"Legacy".into(),requirements:candidate.dependencies.clone(),warnings:vec!["Adoption manages only the reviewed standalone entrypoint. You must confirm it is independent and not shared; dependencies are not adopted.".into()],instructions:"Disabling removes only the approved entrypoint after a verified retained backup; enabling restores its exact bytes. Release control restores the file to its adoption-time state and retains backups. Re-adoption requires a new installed scan and approval.".into(),files:mod_files,supported_builds:vec![],game_path:Some(game.path.clone()),adopted_from:Some(candidate.id.clone()),origin:candidate.source.clone()};
-        let plan=Plan{token:uuid::Uuid::new_v4().to_string(),mod_id:record.id.clone(),operation:"adopt".into(),game,files,blockers,warnings:vec!["Adoption creates a verified local backup and ownership record without changing game files. Later disable/enable operations require their own approval.".into(),"Confirm that the listed file is the complete independent entrypoint, is not a shared dependency, and has no unlisted resources requiring coordinated management. If unsure, cancel and manage it manually.".into()]};
+        let record=ModRecord{id:uuid::Uuid::new_v4().to_string(),name:candidate.name.clone(),author:"Unknown (external file)".into(),version:"Unknown".into(),category:candidate.category.clone(),source:format!("Existing {} file: {}",candidate.source,candidate.location),imported_at:now(),installed_at:None,status:"imported".into(),archive_path:String::new(),archive_hash:String::new(),kind:"Adopted entrypoint".into(),edition:"Legacy".into(),requirements:candidate.dependencies.clone(),warnings:vec!["Adoption manages only the reviewed standalone entrypoint. You must confirm it is independent and not shared; dependencies are not adopted.".into()],instructions:"Disabling removes only the approved entrypoint after a verified retained backup; enabling restores its exact bytes. Release control restores the file to its adoption-time state and retains backups. Re-adoption requires a new installed scan and approval.".into(),files:mod_files,supported_builds:vec![],game_path:Some(game.path.clone()),adopted_from:Some(candidate.id.clone()),origin:candidate.source.clone(),organization:Default::default()};
+        let plan=Plan{token:uuid::Uuid::new_v4().to_string(),mod_id:record.id.clone(),operation:"adopt".into(),independent_scope:None,game,files,blockers,warnings:vec!["Adoption creates a verified local backup and ownership record without changing game files. Later disable/enable operations require their own approval.".into(),"Confirm that the listed file is the complete independent entrypoint, is not a shared dependency, and has no unlisted resources requiring coordinated management. If unsure, cancel and manage it manually.".into()]};
         self.pending.insert(
             plan.token.clone(),
             Pending {
@@ -307,6 +307,7 @@ impl Engine {
                 record,
                 restore: None,
                 adoption: Some(candidate),
+                suit_id: None,
             },
         );
         Ok(plan)

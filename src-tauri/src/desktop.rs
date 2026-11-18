@@ -97,6 +97,70 @@ async fn prepare_adoption(state: State<'_, Shared>, id: String) -> Result<Plan, 
     run(state, move |e| e.prepare_adoption(&id)).await
 }
 #[tauri::command]
+async fn organization_snapshot(
+    state: State<'_, Shared>,
+) -> Result<zoxryn_core::organization::OrganizationSnapshot, String> {
+    run(state, |e| e.organization_snapshot()).await
+}
+#[tauri::command]
+async fn save_collection(
+    state: State<'_, Shared>,
+    id: Option<String>,
+    name: String,
+    description: String,
+    category: String,
+    members: Vec<zoxryn_core::organization::MemberRef>,
+) -> Result<String, String> {
+    run(state, move |e| {
+        e.save_collection(id.as_deref(), &name, &description, &category, &members)
+    })
+    .await
+}
+#[tauri::command]
+async fn remove_collection(state: State<'_, Shared>, id: String) -> Result<(), String> {
+    run(state, move |e| e.remove_collection(&id)).await
+}
+#[tauri::command]
+async fn assign_preview(
+    state: State<'_, Shared>,
+    kind: String,
+    id: String,
+    path: Option<String>,
+) -> Result<(), String> {
+    run(state, move |e| {
+        e.assign_preview(&kind, &id, path.as_deref().map(Path::new))
+    })
+    .await
+}
+#[tauri::command]
+async fn read_preview(state: State<'_, Shared>, key: String) -> Result<String, String> {
+    run(state, move |e| {
+        use base64::Engine as _;
+        Ok(format!(
+            "data:image/png;base64,{}",
+            base64::engine::general_purpose::STANDARD.encode(e.read_preview(&key)?)
+        ))
+    })
+    .await
+}
+#[tauri::command]
+async fn rename_suit(
+    state: State<'_, Shared>,
+    id: String,
+    name: String,
+    category: String,
+) -> Result<(), String> {
+    run(state, move |e| e.rename_suit(&id, &name, &category)).await
+}
+#[tauri::command]
+async fn prepare_suit(
+    state: State<'_, Shared>,
+    id: String,
+    operation: String,
+) -> Result<Plan, String> {
+    run(state, move |e| e.prepare_suit(&id, &operation)).await
+}
+#[tauri::command]
 async fn apply_plan(
     state: State<'_, Shared>,
     token: String,
@@ -214,6 +278,13 @@ pub fn run_app() {
             prepare_clean,
             scan_installed,
             prepare_adoption,
+            organization_snapshot,
+            save_collection,
+            remove_collection,
+            assign_preview,
+            read_preview,
+            rename_suit,
+            prepare_suit,
             apply_plan,
             retry_recovery,
             open_location,

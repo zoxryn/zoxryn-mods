@@ -7,6 +7,7 @@ use std::{
 };
 use zip::{write::SimpleFileOptions, ZipWriter};
 use zoxryn_core::Engine;
+use zoxryn_core::organization::MemberRef;
 fn main() -> Result<()> {
     let root = PathBuf::from(
         std::env::args_os()
@@ -97,6 +98,12 @@ fn main() -> Result<()> {
             engine.apply(&p.token, true, true)?;
         }
     }
+    let mods = engine.snapshot()?.mods;
+    let collection = engine.save_collection(None, "Synthetic weekend collection", "Updater preservation fixture", "Custom", &mods.iter().take(2).map(|m| MemberRef { kind: "managed".into(), id: m.id.clone() }).collect::<Vec<_>>())?;
+    let artwork = root.join("downloads/synthetic-preview.png");
+    // Plain color fixture artwork; never presented as real character artwork.
+    image::RgbaImage::from_pixel(2, 2, image::Rgba([126, 62, 195, 255])).save(&artwork)?;
+    engine.assign_preview("collection", &collection, Some(&artwork))?;
     println!(
         "Synthetic workspace: {}\nLaunch: zoxryn-mods.exe --data-dir \"{}\"",
         root.display(),

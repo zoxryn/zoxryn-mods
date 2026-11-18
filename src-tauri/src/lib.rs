@@ -2,6 +2,8 @@ pub mod archive;
 pub mod engine;
 pub mod game;
 pub mod model;
+pub mod organization;
+pub mod previews;
 pub mod rpf;
 pub mod safety;
 pub mod scanner;

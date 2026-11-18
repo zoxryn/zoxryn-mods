@@ -9,7 +9,9 @@ $env:CARGO_HOME=Join-Path $toolchain 'cargo';$env:RUSTUP_HOME=Join-Path $toolcha
 $python=[IO.Path]::GetFullPath((Join-Path (Split-Path -Parent (Split-Path -Parent (Get-Command node).Source)) '../python/python.exe'))
 $previousTarget=$env:CARGO_TARGET_DIR
 $previousRoot=$env:ZOXRYN_UPDATER_QA_ROOT
-$from='0.1.7';$to='0.1.8'
+$from=(Get-Content (Join-Path $project 'package.json') -Raw|ConvertFrom-Json).version
+$parts=[version]$from
+$to="$($parts.Major).$($parts.Minor).$($parts.Build+1)"
 $installed=$false
 $ownPsPid=[Diagnostics.Process]::GetCurrentProcess().Id
 Push-Location $project

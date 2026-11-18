@@ -200,6 +200,7 @@ pub fn scan(game: &Game, owners: &HashMap<String, String>) -> Result<ScanInvento
         }
         .into();
         if recognized {
+            // Executable names alone do not create suit identities.
             item.notes.push("Installer provenance is not recorded externally. Manual means an unmanaged component found in a recognized loading location.".into());
             item.status = if disabled { "disabled" } else { "enabled" }.into();
             item.notes.push("Status is inferred from a recognized file location and disabled suffix, not from game execution. Filename is the component name; creator identity and full mod boundaries are unverified.".into());
@@ -318,6 +319,34 @@ pub fn scan(game: &Game, owners: &HashMap<String, String>) -> Result<ScanInvento
         } else if data_only {
             item.notes.push("File inventory only; it may be configuration, shared resources, or an ordinary file rather than a mod.".into());
         }
+        if lower.ends_with("/peds.meta") && (is_openiv || lower.starts_with("addonpeds/")) {
+            let metadata = (|| -> Result<Vec<String>> {
+                use std::io::Read;
+                if file.size > 256 * 1024 || file.size + 1 > budget {
+                    bail!("Ped metadata read budget unavailable");
+                }
+                let p = target(root, path)?;
+                let _guard = guard_existing_tree(p.parent().unwrap())?;
+                let f = open_read_no_follow(&p)?;
+                let mut bytes = Vec::new();
+                f.take(file.size + 1).read_to_end(&mut bytes)?;
+                budget = budget.saturating_sub(bytes.len() as u64);
+                if bytes.len() as u64 != file.size {
+                    bail!("Ped metadata changed while scanning");
+                }
+                crate::organization::parse_ped_metadata(&bytes)
+            })();
+            match metadata {
+                Ok(models) => {
+                    item.character_models = models;
+                    item.category = "Characters".into();
+                    item.kind = "Shared ped metadata".into();
+                    item.status = "needs_review".into();
+                    item.notes.push("Loose CPedModelInfo metadata identifies model names; AddonPeds runtime registration and asset ownership are not inferred. Shared registry edits are unsupported.".into());
+                }
+                Err(e) => item.notes.push(format!("Ped metadata unavailable: {e}")),
+            }
+        }
         for dependency in &item.dependencies {
             if !game
                 .prerequisites
@@ -376,6 +405,7 @@ fn base(game: &Game, path: &str, kind: &str, source: &str, confidence: &str) -> 
             .into(),
         managed_id: None,
         rpf: None,
+        character_models: vec![],
     }
 }
 fn warn(result: &mut ScanInventory, message: &str) {

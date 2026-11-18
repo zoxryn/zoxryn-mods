@@ -12,7 +12,7 @@ portable=output/f'Zoxryn-Mods-{version}'
 portable.mkdir(exist_ok=True)
 for name in ['zoxryn-mods.exe','WebView2Loader.dll']:
     shutil.copyfile(release/name,portable/name)
-for name in ['README.md','THIRD_PARTY_NOTICES.md','UPDATES.md']:
+for name in ['README.md','THIRD_PARTY_NOTICES.md','UPDATES.md','ORGANIZATION.md']:
     shutil.copyfile(project/name,portable/name)
 shutil.copytree(project/'licenses',portable/'licenses',dirs_exist_ok=True)
 with zipfile.ZipFile(output/f'Zoxryn-Mods-{version}-Portable.zip','w',zipfile.ZIP_DEFLATED,compresslevel=9) as z:

@@ -47,6 +47,7 @@ pub fn inspect(path: &Path) -> Result<ModRecord> {
         game_path: None,
         adopted_from: None,
         origin: "Zoxryn".into(),
+        organization: Default::default(),
     };
     if ext == "rar" || ext == "7z" {
         record.instructions = format!("{ext} extraction is unavailable in this build. Use a trusted, updated archive tool to inspect it and extract to a separate folder. Review the author's instructions, then create a ZIP preserving the original layout and import that ZIP. Never run bundled installers automatically.");
@@ -149,6 +150,7 @@ pub fn inspect(path: &Path) -> Result<ModRecord> {
         }
         record.requirements = m.requirements;
         record.supported_builds = m.supported_builds;
+        record.organization = m.organization;
     }
     let mut prefix = String::new();
     if let Some((first, _, _)) = entries.first() {
@@ -172,6 +174,15 @@ pub fn inspect(path: &Path) -> Result<ModRecord> {
         .filter(|n| !n.contains('/') && n.to_lowercase().ends_with(".asi"))
         .map(|n| n[..n.len() - 4].to_lowercase())
         .collect();
+    record.organization.validate(&names)?;
+    if let Some(preview) = &mut record.organization.preview {
+        *preview = format!("{prefix}{preview}");
+    }
+    for suit in &mut record.organization.suits {
+        if let Some(preview) = &mut suit.preview {
+            *preview = format!("{prefix}{preview}");
+        }
+    }
     let mut unsupported = Vec::new();
     let mut is_script = false;
     let mut police = false;
@@ -181,7 +192,7 @@ pub fn inspect(path: &Path) -> Result<ModRecord> {
         let ext = lower.rsplit('.').next().unwrap_or("");
         if lower == "zoxryn.json"
             || [
-                "txt", "md", "pdf", "jpg", "jpeg", "png", "url", "html", "htm",
+                "txt", "md", "pdf", "jpg", "jpeg", "png", "webp", "url", "html", "htm",
             ]
             .contains(&ext)
         {
