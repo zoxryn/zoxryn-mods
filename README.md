@@ -1,0 +1,109 @@
+# Zoxryn Mods · 0.1.7
+
+**Discover. Install. Play.** A Windows 11 desktop manager for GTA V **Legacy single-player**, built with Tauri 2, React, TypeScript, Rust, and SQLite. No AI models, account, or paid API.
+
+## Built-in application updates
+
+Version 0.1.7 connects the existing signed Tauri 2 updater to [the official GitHub Releases channel](https://github.com/zoxryn/zoxryn-mods/releases). It checks metadata once at startup, shows the last check and release status, and requires **Update & Restart** approval before downloading, installing and restarting. Both release metadata and installers require the established signing identity; metadata also expires. No polling service runs.
+
+The channel configuration is prepared locally. Publishing the first signed release and installing this bootstrap once require separate approval. Until release assets are published, a check reports **No release published** and the application remains usable. The current installed application is not changed by preparing a build. See [UPDATES.md](UPDATES.md) for the release workflow, security model and recovery instructions.
+
+## Existing mods: Phase 1.5
+
+Open **Installed Mods** after selecting GTA V Legacy. Selection scans automatically; **Rescan** runs on demand and once at startup for the saved Legacy selection. The game scan is read-only; discovery records are persisted separately in SQLite. No continuous polling is used.
+
+The inventory separates recognized loading components, possible OpenIV modifications, unknown files, and the managed ownership ledger. Search names, locations, or sampled RPF resources; filter category, source, confidence, and status; sort by name, location, status, or size. Tables show 50 items per page. Status inferred from location/suffix does not prove a mod actually ran. A filename does not establish a creator's mod identity.
+
+Scanned locations include root files; recursive `scripts/`, `plugins/`, `mods/`, `lspdfr/`, `RAGEPluginHook/`, `MenyooStuff/`, `maps/`, `MapEditor/`, `AddonPeds/`, `lml/`, `reshade-shaders/`, and `enbseries/`. Original root RPFs and `update/update.rpf` are inventory-only. Other original game directories and arbitrary unknown folders are not recursively scanned. Traversal, results, depth, and RPF reads have explicit limits; skipped/partial scans are reported and block adoption.
+
+RPF7 files under `mods/` can have their unencrypted **top-level table of contents** inspected. This is limited to 32,768 entries and 2 MiB of TOC per file, with a 32 MiB total content-read budget per scan. Up to 80 resource paths are displayed per container. Vehicles, weapons, clothing/characters, and maps can be inferred from resource names, but these are clues—not independently identified mods or proof that those resources differ from originals. No original RPF payloads are read or compared. Encrypted/unsupported/malformed and nested RPF contents remain unavailable; no game keys are extracted and no archive is changed.
+
+### Safe adoption
+
+Only an independently confirmed **single root ASI** or **single `.cs`/`.vb` source file directly in `scripts/`** is eligible. Matching companion files/resource directories, duplicate executable stems, shared prerequisites, hard links, incomplete scans, missing detected dependencies, external disabled naming schemes, binary script libraries, RAGE/LSPDFR packages, and RPF containers block adoption. No arbitrary file groups or install paths are guessed.
+
+Review the exact file plan and the extra independent-file ownership acknowledgment. Adoption creates a verified retained backup and a management record; it leaves the game file unchanged. Every later disable or enable has its own approved plan. Disable removes only the approved entrypoint after backup; enable restores the exact bytes. A fresh scope check blocks new companion/shared files. **Release control** restores the entrypoint to its adoption-time bytes and relinquishes management; it does not uninstall an externally installed mod. Zoxryn tracked-cleanup excludes adopted external entries because their original clean baseline is unknown.
+
+Companion ownership, dependencies, loader behavior, and maliciousness cannot be proven from arbitrary binary filenames. Human confirmation is required; if unsure, cancel and leave management manual. Manual/OpenIV source labels reflect discovery location, not a verified external installer log. Phase 1 import, backups, restore, dependencies, and management behavior remain available.
+
+## First use
+
+1. Run the supplied Windows installer, or launch the standalone executable.
+2. Confirm a detected installation or choose the directory containing `GTA5.exe`, `update/update.rpf`, and `x64/`. Enhanced and ambiguous directories cannot receive automated installs.
+3. Review **Game & dependencies**. File markers indicate presence, not version compatibility. Open the publisher pages and install prerequisites manually according to their supported builds.
+4. Download an archive from its creator. Select **Import mod**. Import retains an independent copy and changes no game files.
+5. Read the inspection, dependencies, and author instructions. Choose **Review install**, examine every target, and approve the two required acknowledgments. Close the game first.
+6. Enable, disable, and uninstall through the same reviewed plans. Backups and operation reports appear under **Backups & recovery**.
+
+Zoxryn does not launch the game in Phase 1. Read the single-player checklist before launching manually. Never use a modded installation for GTA Online. No security settings or anti-cheat protections are changed.
+
+## What can be installed automatically?
+
+| Archive / layout | Phase 1 behavior |
+|---|---|
+| ZIP containing root `.asi` plugins | Supported after prerequisite checks and approval |
+| Matching `.ini`, `.cfg`, `.json`, `.xml` ASI sidecars | Supported when the stem matches an included ASI |
+| Explicit `scripts/` paths with `.dll`, `.cs`, `.vb`, `.ini`, `.cfg`, `.json`, `.xml`, `.dat` | Supported after ScriptHookVDotNet checks and approval |
+| One unambiguous wrapper directory | Recognized and removed from the target layout |
+| ZIP with other operational files, mixed installers, loose DLLs or assets | Manual-only; no partial install guessed |
+| OIV packages and DLC/RPF structures | Inspected as ZIP where applicable; manual OpenIV **mods-folder** instructions |
+| RAGE/LSPDFR packages | Detected; manual publisher instructions |
+| 7z / RAR | Retained, **not inspected or extracted** in this release. Inspect with a trusted updated tool and repackage as ZIP while preserving layout |
+| Encrypted archives, unsupported ZIP compression, other archive types | Rejected |
+
+Never assume a ZIP is compatible with Legacy merely because its layout is supported. There is no universal one-click GTA V mod installation.
+
+## Records, backups, and recovery
+
+The desktop app uses `%LOCALAPPDATA%\com.zoxryn.mods\` for its SQLite database, retained archives, backups, and manager lock. The app uses a stable identifier and data location between updates. The installer does not delete these files during normal updates; do not choose a data-removal option during uninstall if you want to keep them.
+
+Every modified file has an owner and SHA-256 fingerprint. A disabled mod reserves ownership of its targets, preventing overlapping installations. Existing files are backed up; newly created files are removed on disable/uninstall. Shared prerequisites are not automatically installed or removed. External edits block destructive changes instead of being silently overwritten. Downloaded archives and all backup versions remain available after uninstalling a mod.
+
+Each operation stores a durable SQLite journal before writing. The app stages verified data, replaces files, verifies outcomes, then commits the mod records and ownership together. A failed operation attempts rollback. On restart, pending journals are rolled back before further writes. Recovery preserves unexpected external edits and requires manual reconciliation before retrying. Multi-file writes are recoverable, not an OS-level atomic transaction.
+
+Restore backups from newest to oldest **for the affected mod**, reviewing each file plan. Restore can itself be reversed through its new backup. To restore a clean **tracked** state, use **Review tracked cleanup** in Backups & recovery. It shows a combined plan and removes installed records for the selected folder, restoring originals. Each mod is a separate recoverable transaction; interrupted batch cleanup may leave some mods already removed. A normal error attempts to roll back completed child operations. Disabled mods already have originals restored. This does not audit or certify untracked files or GTA Online safety. Empty directories created for mods can remain after removal.
+
+## Optional metadata
+
+An optional `zoxryn.json` at archive root (or inside the single wrapper directory) supplies creator metadata. Unknown fields are rejected to avoid silently ignoring compatibility constraints. All fields are optional:
+
+```json
+{
+  "name": "Example Legacy Script",
+  "author": "Creator",
+  "version": "1.0.0",
+  "category": "Scripts",
+  "source": "Creator's download page",
+  "edition": "Legacy",
+  "requirements": ["shv", "asi", "shvdn"],
+  "supported_builds": ["1.0.3889.0"]
+}
+```
+
+Edition values for automated installs: `Legacy`, `Both`, or unspecified with explicit human compatibility review. `supported_builds`, when present, is an exact match against a reliably readable Windows executable file version; an unknown build blocks installation. No compatibility version is inferred from a filename. Known dependency IDs: `shv`, `asi`, `shvdn`, `openiv`, `rph`, `lspdfr`. Unknown dependency IDs block installation until manual resolution. Categories: Vehicles, Police, Superheroes, Graphics, Scripts, Maps, Characters, Gameplay.
+
+## Development
+
+Use Node 22+, pnpm, Rust stable, and either the standard Tauri Windows MSVC toolchain or a Windows GNU toolchain with GCC on PATH. WebView2 is required at runtime. The NSIS installer offers WebView2 bootstrap installation if it is missing.
+
+```powershell
+pnpm install --frozen-lockfile
+pnpm build
+# Run from src-tauri/ so its target configuration is used:
+cd src-tauri
+cargo test
+cd ..
+pnpm tauri build --features desktop
+```
+
+For development use two terminals: `pnpm dev` and `pnpm tauri dev --features desktop`. Rebuild the frontend before packaging; `tauri.conf.json` deliberately does not depend on a globally installed package manager. `scripts/build.ps1` automates the test/build sequence and finds the workspace-local Rust/GCC toolchain when available.
+
+UI tests: `pnpm exec playwright install chromium`, then `pnpm test:ui`. The browser preview has no access to game files. Native installation/rollback tests use disposable synthetic game directories under the OS temporary directory. They never discover or modify a real GTA V installation.
+
+## Phase 2 extension
+
+`src/providers.ts` defines a provider capability interface with GTA5-Mods.com and LCPDFR.com publisher-page adapters. Authorized downloads are intentionally unimplemented. Future implementations must honor terms, creator permissions, authentication, rate limits, and download restrictions; never bypass CAPTCHAs or invent download URLs.
+
+Recommended next work: signed release pipeline, broader native end-to-end and power-loss testing, handle-based filesystem hardening, sandboxed 7z/RAR extraction, curated version compatibility data, explicit per-mod installers, and authorization-based download providers.
+
+For isolated native QA, use `cargo run --example create_synthetic_workspace -- <new-directory>` from `src-tauri/`, then launch `zoxryn-mods.exe --data-dir "<new-directory>\data"`. The fixture tool refuses to modify an existing directory and creates only nonfunctional synthetic files.

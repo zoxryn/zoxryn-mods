@@ -1,0 +1,6 @@
+{
+  "identifier": "main",
+  "description": "Local window and archive picker only",
+  "windows": ["main"],
+  "permissions": ["core:default", "dialog:allow-open"]
+}

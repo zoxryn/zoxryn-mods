@@ -1,0 +1,14 @@
+{
+  "version": "0.1.7",
+  "notes": "EXAMPLE ONLY. Generate and sign current metadata with scripts/prepare-github-release.ps1.",
+  "pub_date": "GENERATED_RFC3339_UTC",
+  "expires_at": "GENERATED_RFC3339_UTC",
+  "platforms": {
+    "windows-x86_64-nsis": {
+      "size": 0,
+      "sha256": "GENERATED_SHA256",
+      "url": "https://github.com/zoxryn/zoxryn-mods/releases/download/v0.1.7/Zoxryn-Mods-0.1.7-Setup.exe",
+      "signature": "GENERATED_OFFICIAL_TAURI_SIGNATURE"
+    }
+  }
+}

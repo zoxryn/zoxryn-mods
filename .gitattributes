@@ -1,0 +1,5 @@
+* text=auto eol=lf
+*.png binary
+*.ico binary
+# Signatures authenticate exact bytes; never normalize the signed fixture.
+src-tauri/fixtures/updater/* -text

@@ -1,0 +1,141 @@
+.update-card {
+  padding: 3px 0 25px;
+  border-bottom: 1px solid var(--line);
+  margin-bottom: 24px;
+}
+.update-title {
+  display: flex;
+  align-items: center;
+  gap: 15px;
+}
+.update-title > div {
+  flex: 1;
+}
+.update-title h2 {
+  font-size: 16px;
+  margin: 0 0 7px;
+}
+.update-title p {
+  font-size: 11px;
+  color: #9583a4;
+  margin: 0;
+}
+.update-version-grid {
+  display: grid;
+  grid-template-columns: repeat(3, 1fr);
+  gap: 12px;
+  margin: 24px 0 19px;
+}
+.update-version-grid > div {
+  padding: 15px;
+  background: #221a2d;
+  border: 1px solid #3a2b49;
+  border-radius: 7px;
+}
+.update-version-grid span {
+  display: block;
+  color: #8d7c9b;
+  font-size: 10px;
+  margin-bottom: 9px;
+}
+.update-version-grid strong {
+  font-size: 16px;
+  font-weight: 550;
+  color: #cdb1e6;
+}
+.update-trust {
+  display: flex;
+  gap: 7px;
+  align-items: flex-start;
+  color: #8bb49c;
+  font-size: 10px;
+  line-height: 1.8;
+}
+.release-notes {
+  margin: 20px 0;
+}
+.release-notes h3 {
+  font-size: 12px;
+  color: #c6adcf;
+  margin-bottom: 10px;
+}
+.release-notes pre {
+  white-space: pre-wrap;
+  overflow-wrap: anywhere;
+  max-height: 240px;
+  overflow-y: auto;
+  font:
+    11px/1.8 'Segoe UI',
+    sans-serif;
+  color: #b69ec8;
+  background: #141018;
+  border: 1px solid #33243e;
+  border-radius: 7px;
+  padding: 15px;
+}
+.update-controls {
+  display: flex;
+  gap: 10px;
+  flex-wrap: wrap;
+  margin-top: 17px;
+}
+.update-progress {
+  margin: 20px 0;
+  padding: 15px;
+  background: #241b2f;
+  border: 1px solid #49315f;
+  border-radius: 8px;
+}
+.update-progress > div {
+  display: flex;
+  justify-content: space-between;
+  gap: 12px;
+  font-size: 11px;
+}
+.update-progress strong {
+  font-weight: 500;
+  color: #c5a5e3;
+}
+.update-progress span {
+  font-size: 10px;
+  color: #9c7db4;
+}
+.update-progress progress {
+  width: 100%;
+  height: 7px;
+  margin-top: 16px;
+  accent-color: #b17ce9;
+  border: 0;
+  border-radius: 9px;
+  overflow: hidden;
+}
+.update-progress progress::-webkit-progress-bar {
+  background: #3a2a4a;
+}
+.update-progress progress::-webkit-progress-value {
+  background: #b17ce9;
+}
+.update-progress p {
+  font-size: 9px;
+  margin: 12px 0 0;
+  color: #8f789f;
+}
+.update-recovery {
+  margin-top: 23px;
+  padding-top: 18px;
+  border-top: 1px solid var(--line);
+}
+.update-recovery strong {
+  font-size: 11px;
+  font-weight: 500;
+  color: #b7a1c8;
+}
+.update-recovery p {
+  font-size: 10px;
+  color: #877294;
+  margin: 8px 0 12px;
+  max-width: 650px;
+}
+.update-overlay {
+  z-index: 25;
+}
