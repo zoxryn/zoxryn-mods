@@ -41,7 +41,7 @@ else:
     receipt = json.loads((root / 'data/app-updates/receipt.json').read_text())
     versions=json.loads((root/'versions.json').read_text(encoding='utf-8-sig'))
     assert old['version'] == versions['from'] and new['version'] == versions['to']
-    assert old['identifier'] == new['identifier'] == 'com.zoxryn.mods'
+    assert old['identifier'] == new['identifier'] == 'com.zoxryn.mods.updater-qa'
     assert new['launched'] and new['mods'] == 3 and new['backups'] == 3
     assert Path(new['data']).samefile(root / 'data')
     assert Path(new['executable']).parent.samefile(root / 'Installed QA App')

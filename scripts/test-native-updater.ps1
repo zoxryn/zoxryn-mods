@@ -1,4 +1,4 @@
-param([string]$Root)
+param([string]$Root,[string]$FromVersion,[string]$ToVersion)
 $ErrorActionPreference='Stop'
 $project=Split-Path -Parent $PSScriptRoot
 $workspace=Split-Path -Parent (Split-Path -Parent $project)
@@ -9,9 +9,10 @@ $env:CARGO_HOME=Join-Path $toolchain 'cargo';$env:RUSTUP_HOME=Join-Path $toolcha
 $python=[IO.Path]::GetFullPath((Join-Path (Split-Path -Parent (Split-Path -Parent (Get-Command node).Source)) '../python/python.exe'))
 $previousTarget=$env:CARGO_TARGET_DIR
 $previousRoot=$env:ZOXRYN_UPDATER_QA_ROOT
-$from=(Get-Content (Join-Path $project 'package.json') -Raw|ConvertFrom-Json).version
+$from=if($FromVersion){$FromVersion}else{(Get-Content (Join-Path $project 'package.json') -Raw|ConvertFrom-Json).version}
 $parts=[version]$from
-$to="$($parts.Major).$($parts.Minor).$($parts.Build+1)"
+$to=if($ToVersion){$ToVersion}else{"$($parts.Major).$($parts.Minor).$($parts.Build+1)"}
+if($from -notmatch '^\d+\.\d+\.\d+$' -or $to -notmatch '^\d+\.\d+\.\d+$' -or [version]$to -le [version]$from){throw 'Stable increasing QA versions required'}
 $installed=$false
 $ownPsPid=[Diagnostics.Process]::GetCurrentProcess().Id
 Push-Location $project

@@ -1,5 +1,15 @@
 import { useEffect, useRef, useState } from 'react';
-import { Image as ImageIcon } from 'lucide-react';
+import {
+  Boxes,
+  Car,
+  Shield,
+  Shirt,
+  Sparkles,
+  Code2,
+  Map as MapIcon,
+  Crosshair,
+  Users,
+} from 'lucide-react';
 import { call } from './api';
 const cache = new Map<string, string>();
 const inFlight = new Map<string, Promise<string>>();
@@ -37,7 +47,43 @@ function thumbnail(key: string): Promise<string> {
 function pump() {
   while (active < 3 && queued.length) queued.shift()!();
 }
-export default function Thumbnail({ name, preview }: { name: string; preview: string | null }) {
+export default function Thumbnail({
+  name,
+  preview,
+  category = '',
+}: {
+  name: string;
+  preview: string | null;
+  category?: string;
+}) {
+  const theme = /police|lspdfr/i.test(category)
+    ? 'police'
+    : /vehicle/i.test(category)
+      ? 'vehicles'
+      : /weapon/i.test(category)
+        ? 'weapons'
+        : /superhero/i.test(category)
+          ? 'heroes'
+          : /skin|ped|character/i.test(category)
+            ? 'characters'
+            : /outfit|suit/i.test(category)
+              ? 'outfits'
+              : /map|graphic/i.test(category)
+                ? 'world'
+                : /script|plugin/i.test(category)
+                  ? 'scripts'
+                  : 'package';
+  const Glyph = {
+    police: Shield,
+    vehicles: Car,
+    weapons: Crosshair,
+    heroes: Sparkles,
+    characters: Users,
+    outfits: Shirt,
+    world: MapIcon,
+    scripts: Code2,
+    package: Boxes,
+  }[theme];
   const element = useRef<HTMLDivElement>(null);
   const [loaded, setLoaded] = useState<{ key: string; source: string } | null>(null);
   const source = loaded?.key === preview ? loaded.source : null;
@@ -85,10 +131,14 @@ export default function Thumbnail({ name, preview }: { name: string; preview: st
           onError={() => setLoaded(null)}
         />
       ) : (
-        <div className="org-placeholder">
-          <ImageIcon size={27} />
+        <div className={`org-placeholder artwork-${theme}`} data-placeholder-category={theme}>
+          <Glyph size={43} strokeWidth={1.3} aria-hidden="true" />
           <span>{name}</span>
-          <small>{preview ? 'Preview loading or unavailable' : 'No preview assigned'}</small>
+          <small>
+            {preview
+              ? 'Preview loading or unavailable'
+              : `${category || 'Package'} · original placeholder`}
+          </small>
         </div>
       )}
     </div>

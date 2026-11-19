@@ -1,4 +1,4 @@
-import { useDeferredValue, useEffect, useMemo, useRef, useState } from 'react';
+import { useDeferredValue, useEffect, useId, useMemo, useRef, useState } from 'react';
 import {
   Boxes,
   ChevronRight,
@@ -13,9 +13,15 @@ import {
   Trash2,
   TriangleAlert,
   X,
+  Car,
+  Shield,
+  Shirt,
+  Users,
+  Sparkles,
 } from 'lucide-react';
 import { call, pick } from './api';
 import Thumbnail from './Thumbnail';
+import FileGroups from './FileGroups';
 import type {
   Collection,
   Component,
@@ -27,6 +33,7 @@ import { suitCategories } from './organizationTypes';
 import './OrganizationPage.css';
 
 interface Props {
+  focusId?: string | null;
   mode: 'collections' | 'suits';
   data: OrganizationSnapshot;
   loading: boolean;
@@ -40,7 +47,31 @@ interface Props {
 const refKey = (m: MemberRef) => `${m.kind}:${m.id}`;
 const label = (value: string) => value.replaceAll('_', ' ').replace(/^./, (c) => c.toUpperCase());
 function Badge({ status }: { status: string }) {
-  return <span className={`badge ${status}`}>{label(status)}</span>;
+  const text = status === 'unknown' ? 'Detected' : label(status);
+  const meaning =
+    status === 'unknown'
+      ? 'Detected only; enabled state and compatibility are unverified.'
+      : status === 'enabled'
+        ? 'Enabled loading files or managed package; compatibility remains unverified.'
+        : status === 'disabled'
+          ? 'Disabled package or loading entry; this is not an in-game compatibility check.'
+          : status === 'needs_review'
+            ? 'Needs review: inspect membership, dependencies and management restrictions before any file operation.'
+            : 'See component details for the recorded state.';
+  return (
+    <span className={`badge ${status}`} title={meaning} aria-label={`${text}: ${meaning}`}>
+      {text}
+    </span>
+  );
+}
+function OutfitFiles({ files }: { files: string[] }) {
+  const [open, setOpen] = useState(false);
+  return (
+    <details className="org-expand" onToggle={(e) => setOpen(e.currentTarget.open)}>
+      <summary>Outfit components ({files.length})</summary>
+      {open && <FileGroups files={files} />}
+    </details>
+  );
 }
 function Files({ files }: { files: string[] }) {
   const [limit, setLimit] = useState(40);
@@ -85,6 +116,21 @@ function Members({
         </button>
       )}
     </div>
+  );
+}
+function ExpandableMembers({
+  members,
+  onSelect,
+}: {
+  members: Component[];
+  onSelect: (m: Component) => void;
+}) {
+  const [open, setOpen] = useState(false);
+  return (
+    <details className="org-expand" onToggle={(e) => setOpen(e.currentTarget.open)}>
+      <summary>Components ({members.length})</summary>
+      {open && <Members members={members} onSelect={onSelect} />}
+    </details>
   );
 }
 function Modal({
@@ -147,6 +193,12 @@ export default function OrganizationPage(props: Props) {
   const [layout, setLayout] = useState<'grid' | 'list'>('grid');
   const [page, setPage] = useState(0);
   const [selected, setSelected] = useState<string | null>(null);
+  useEffect(() => {
+    if (props.focusId) {
+      setSelected(props.focusId);
+      setComponent(null);
+    }
+  }, [props.focusId]);
   const [component, setComponent] = useState<Component | null>(null);
   const [pending, setPending] = useState(false);
   const [localError, setLocalError] = useState<string | null>(null);
@@ -158,9 +210,38 @@ export default function OrganizationPage(props: Props) {
   const [memberQuery, setMemberQuery] = useState('');
   const [deleting, setDeleting] = useState<Collection | null>(null);
   const [editingSuit, setEditingSuit] = useState<Suit | null>(null);
+  const [parentFilter, setParentFilter] = useState('all');
+  const tooltipId = useId();
+  const categoryHintId = (name: string) => `${tooltipId}-${name.replace(/[^a-z0-9]/gi, '-')}`;
+  const [dismissedTooltip, setDismissedTooltip] = useState<string | null>(null);
+  const [parentLimit, setParentLimit] = useState(20);
+  const parentGroups = useMemo(() => {
+    const groups = new Map<string, number>();
+    for (const suit of data.suits) groups.set(suit.parent, (groups.get(suit.parent) ?? 0) + 1);
+    return [...groups].sort(([a], [b]) => a.localeCompare(b));
+  }, [data.suits]);
+  function chooseParent(parent: string) {
+    setParentFilter(parent);
+    setComponent(null);
+    setSelected(
+      [...data.suits]
+        .filter((s) => parent === 'all' || s.parent === parent)
+        .sort((a, b) => a.name.localeCompare(b.name))[0]?.id ?? null,
+    );
+  }
+  const [policeSection, setPoliceSection] = useState('all');
+  const [relationshipConfirmed, setRelationshipConfirmed] = useState(false);
   const isSuit = mode === 'suits';
   const locked = busy || pending;
   const entries = isSuit ? data.suits : data.collections;
+  useEffect(() => {
+    if (entries.length && (!selected || !entries.some((item) => item.id === selected)))
+      setSelected(
+        entries.some((item) => item.id === props.focusId)
+          ? props.focusId!
+          : [...entries].sort((a, b) => a.name.localeCompare(b.name))[0].id,
+      );
+  }, [entries]);
   const categories = useMemo(
     () =>
       isSuit ? [...suitCategories] : [...new Set(data.collections.map((c) => c.category))].sort(),
@@ -175,8 +256,18 @@ export default function OrganizationPage(props: Props) {
               ? item.members.flatMap((m) => [m.name, ...m.files]).join(' ')
               : `${item.parent} ${item.model ?? ''} ${item.files.join(' ')}`;
           return (
-            (category === 'all' || item.category === category) &&
+            (category === 'all' ||
+              item.category === category ||
+              (category === 'Police & LSPDFR' &&
+                'description' in item &&
+                item.description.startsWith('RAGE Plugin Hook (shared dependency) · '))) &&
+            (category !== 'Police & LSPDFR' ||
+              policeSection === 'all' ||
+              ('description' in item && item.description.startsWith(policeSection + ' · '))) &&
             (status === 'all' || item.status === status) &&
+            (!isSuit ||
+              parentFilter === 'all' ||
+              ('parent' in item && item.parent === parentFilter)) &&
             `${item.name} ${extra}`.toLowerCase().includes(deferred.toLowerCase())
           );
         })
@@ -189,9 +280,12 @@ export default function OrganizationPage(props: Props) {
                 ? b.name.localeCompare(a.name)
                 : a.name.localeCompare(b.name),
         ),
-    [entries, category, status, deferred, sort],
+    [entries, category, status, deferred, sort, parentFilter, isSuit, policeSection],
   );
-  useEffect(() => setPage(0), [deferred, category, status, sort, mode]);
+  useEffect(
+    () => setPage(0),
+    [deferred, category, status, sort, mode, parentFilter, policeSection],
+  );
   const maxPage = Math.max(0, Math.ceil(filtered.length / 24) - 1);
   const currentPage = Math.min(page, maxPage);
   const shown = filtered.slice(currentPage * 24, currentPage * 24 + 24);
@@ -199,10 +293,18 @@ export default function OrganizationPage(props: Props) {
   const selectedSuit = isSuit ? data.suits.find((s) => s.id === selected) : undefined;
   const memberMatches = useMemo(
     () =>
-      data.available_members
+      [
+        ...data.available_members,
+        ...(editor && editor !== 'new'
+          ? editor.members.filter(
+              (m) =>
+                !data.available_members.some((a) => refKey(a.reference) === refKey(m.reference)),
+            )
+          : []),
+      ]
         .filter((m) => `${m.name} ${m.location}`.toLowerCase().includes(memberQuery.toLowerCase()))
         .slice(0, 60),
-    [data.available_members, memberQuery],
+    [data.available_members, memberQuery, editor],
   );
   async function mutate(fn: () => Promise<unknown>): Promise<boolean> {
     setPending(true);
@@ -226,6 +328,7 @@ export default function OrganizationPage(props: Props) {
     setDescription(collection === 'new' ? '' : collection.description);
     setEditCategory(collection === 'new' ? 'Custom' : collection.category);
     setMembers(collection === 'new' ? [] : collection.members.map((m) => m.reference));
+    setRelationshipConfirmed(false);
     setMemberQuery('');
     setLocalError(null);
   }
@@ -239,6 +342,11 @@ export default function OrganizationPage(props: Props) {
     }
   }
   function selectMember(member: Component) {
+    if (member.reference.kind === 'collection') {
+      setSelected(member.reference.id);
+      setComponent(null);
+      return;
+    }
     if (member.reference.kind === 'suit' && isSuit) {
       setSelected(member.reference.id);
       setComponent(null);
@@ -253,10 +361,10 @@ export default function OrganizationPage(props: Props) {
       <div className="org-heading">
         <div>
           <div className="eyebrow">{isSuit ? 'CHARACTER LIBRARY' : 'CONNECTED COMPONENTS'}</div>
-          <h2>{isSuit ? 'Character outfits & resources' : 'Your mod collections'}</h2>
+          <h2>{isSuit ? 'Characters, suits & skins' : 'Your mod collections'}</h2>
           <p>
             {isSuit
-              ? 'Declared outfits and discoverable character resources, with ownership and management limits.'
+              ? 'Identifiable outfits grouped by their declared character or package. Uncertain resources stay in the Advanced File Inspector.'
               : 'Packages stay together. Custom collections reference your existing records.'}
           </p>
         </div>
@@ -299,7 +407,118 @@ export default function OrganizationPage(props: Props) {
           ))}
         </details>
       )}
+      <div className="neon-category-rail" aria-label="Quick categories">
+        {(isSuit
+          ? [
+              { name: 'all', label: 'All outfits', icon: Grid2X2 },
+              { name: 'Superhero Suits', label: 'Superhero Suits', icon: Sparkles },
+              { name: 'Police Uniforms', label: 'Police Uniforms', icon: Shield },
+              { name: 'Custom Peds', label: 'Custom Peds', icon: Users },
+              { name: 'Civilian Outfits', label: 'Civilian Outfits', icon: Shirt },
+            ]
+          : [
+              { name: 'all', label: 'All collections', icon: Grid2X2 },
+              { name: 'Vehicles', label: 'Vehicles', icon: Car },
+              { name: 'Police & LSPDFR', label: 'Police & LSPDFR', icon: Shield },
+              { name: 'Superhero Mods', label: 'Superhero Mods', icon: Sparkles },
+              { name: 'Peds & Skins', label: 'Peds & Skins', icon: Users },
+            ]
+        ).map((item) => (
+          <button
+            key={item.name}
+            title={item.label}
+            aria-label={`Show ${item.label}`}
+            aria-describedby={categoryHintId(item.name)}
+            onFocus={() => setDismissedTooltip(null)}
+            onMouseEnter={() => setDismissedTooltip(null)}
+            onKeyDown={(e) => {
+              if (e.key === 'Escape') {
+                e.stopPropagation();
+                setDismissedTooltip(item.name);
+              }
+            }}
+            aria-pressed={category === item.name}
+            onClick={() => setCategory(item.name)}
+          >
+            <item.icon size={23} aria-hidden="true" />
+            <span
+              className="category-tooltip"
+              role="tooltip"
+              hidden={dismissedTooltip === item.name}
+              id={categoryHintId(item.name)}
+            >
+              {item.label}
+            </span>
+          </button>
+        ))}
+      </div>
+      <p className="selected-category" aria-live="polite">
+        Category:{' '}
+        <strong>
+          {category === 'all' ? (isSuit ? 'All outfits' : 'All collections') : category}
+        </strong>
+      </p>
+      {isSuit && (
+        <div className="character-browser" role="group" aria-label="Characters and parent packages">
+          <strong>Characters & packages</strong>
+          <div className="character-choices">
+            <button aria-pressed={parentFilter === 'all'} onClick={() => chooseParent('all')}>
+              All outfits <small>{data.suits.length}</small>
+            </button>
+            {parentGroups.slice(0, parentLimit).map(([parent, count]) => (
+              <button
+                key={parent}
+                aria-label={`Browse ${parent}`}
+                aria-pressed={parentFilter === parent}
+                onClick={() => chooseParent(parent)}
+              >
+                {parent}
+                <small>
+                  {count} {count === 1 ? 'outfit' : 'outfits'}
+                </small>
+              </button>
+            ))}
+            {parentGroups.length > parentLimit && (
+              <button onClick={() => setParentLimit((n) => n + 20)}>
+                More characters & packages
+              </button>
+            )}
+          </div>
+        </div>
+      )}
       <div className="org-filters">
+        {!isSuit && category === 'Police & LSPDFR' && (
+          <select
+            aria-label="Police package section"
+            value={policeSection}
+            onChange={(e) => setPoliceSection(e.target.value)}
+          >
+            <option value="all">All police packages</option>
+            {[
+              'LSPDFR Core',
+              'RAGE Plugin Hook (shared dependency)',
+              'Police Callout Packs',
+              'Police Plugins',
+              'Police Vehicle Packs',
+              'Police Uniforms & Peds',
+              'Police Audio and Other Add-ons',
+            ].map((section) => (
+              <option key={section}>{section}</option>
+            ))}
+          </select>
+        )}
+        {isSuit && (
+          <select
+            aria-label="Parent character or package"
+            value={parentFilter}
+            onChange={(e) => chooseParent(e.target.value)}
+          >
+            <option value="all">All parent packages</option>
+            {[...new Set(data.suits.map((s) => s.parent))].sort().map((parent) => (
+              <option key={parent}>{parent}</option>
+            ))}
+          </select>
+        )}
         <label className="search-box">
           <Search size={16} />
           <input
@@ -369,7 +588,7 @@ export default function OrganizationPage(props: Props) {
       <div className="org-result-count" role="status">
         {loading
           ? 'Refreshing metadata…'
-          : `${filtered.length} ${isSuit ? 'suits / resource candidates' : 'collections'} · ${entries.length} total`}
+          : `${filtered.length} ${isSuit ? 'identified outfits' : 'collections'} · ${entries.length} total`}
       </div>
       <div
         className={`org-workspace ${selectedCollection || selectedSuit || component ? 'with-details' : ''}`}
@@ -389,17 +608,24 @@ export default function OrganizationPage(props: Props) {
                     setComponent(null);
                   }}
                 >
-                  <Thumbnail name={item.name} preview={item.preview} />
+                  <Thumbnail name={item.name} preview={item.preview} category={item.category} />
+                  <span className="card-layer-icon" aria-hidden="true">
+                    <Boxes size={18} />
+                  </span>
                   <div className="org-card-copy">
+                    <span className="evidence-caption">
+                      {'members' in item
+                        ? item.automatic
+                          ? 'Detected package / relationship'
+                          : 'User-selected collection'
+                        : 'Identified outfit · compatibility unverified'}
+                    </span>
                     <Badge status={item.status} />
                     <h3>{item.name}</h3>
                     <p>{item.category}</p>
                     {'members' in item ? (
                       <small>
-                        {new Set(item.members.flatMap((m) => (m.mod_id ? [m.mod_id] : []))).size}{' '}
-                        mod records ·{' '}
-                        {item.members.filter((m) => m.reference.kind === 'suit').length} suits ·{' '}
-                        {item.unique_files} unique files
+                        {item.unique_files} unique files · {item.members.length} related components
                       </small>
                     ) : (
                       <small>
@@ -418,11 +644,9 @@ export default function OrganizationPage(props: Props) {
                   </div>
                 </button>
                 {'members' in item && (
-                  <details className="org-expand">
-                    <summary>Components ({item.members.length})</summary>
-                    <Members members={item.members} onSelect={selectMember} />
-                  </details>
+                  <ExpandableMembers members={item.members} onSelect={selectMember} />
                 )}
+                {'parent' in item && <OutfitFiles files={item.files} />}
               </article>
             ))}
           </div>
@@ -487,6 +711,8 @@ export default function OrganizationPage(props: Props) {
                 <p>{component.role}</p>
                 <p>{component.control_reason}</p>
                 <h4>File locations</h4>
+                <code className="path">{component.location}</code>
+                <FileGroups files={component.files} />
                 <Files files={component.files} />
                 {component.mod_id && (
                   <button className="button" onClick={() => props.onParent(component.mod_id!)}>
@@ -496,7 +722,11 @@ export default function OrganizationPage(props: Props) {
               </>
             ) : selectedSuit ? (
               <>
-                <Thumbnail name={selectedSuit.name} preview={selectedSuit.preview} />
+                <Thumbnail
+                  name={selectedSuit.name}
+                  preview={selectedSuit.preview}
+                  category={selectedSuit.category}
+                />
                 <h3>{selectedSuit.name}</h3>
                 <Badge status={selectedSuit.status} />
                 <dl>
@@ -528,11 +758,21 @@ export default function OrganizationPage(props: Props) {
                   </p>
                 ))}
                 <h4>Management</h4>
-                <p className={selectedSuit.manageable ? '' : 'inline-warning'}>
+                <p
+                  id="suit-management-reason"
+                  className={selectedSuit.manageable ? '' : 'inline-warning'}
+                >
+                  {locked
+                    ? 'Another operation is active. Wait for it to finish before reviewing a suit transaction. '
+                    : selectedSuit.manageable &&
+                        !['enabled', 'disabled'].includes(selectedSuit.status)
+                      ? 'The parent package is not currently installed in an enabled or disabled state. Review its installation first. '
+                      : ''}
                   {selectedSuit.control_reason}
                 </p>
                 <button
                   className="button primary"
+                  aria-describedby="suit-management-reason"
                   disabled={
                     locked ||
                     !selectedSuit.manageable ||
@@ -548,7 +788,7 @@ export default function OrganizationPage(props: Props) {
                   Review {selectedSuit.status === 'disabled' ? 'enable' : 'disable'} suit
                 </button>
                 <h4>File locations</h4>
-                <Files files={selectedSuit.files} />
+                <FileGroups files={selectedSuit.files} />
                 {selectedSuit.notes.map((n) => (
                   <p className="subtle" key={n}>
                     {n}
@@ -596,12 +836,21 @@ export default function OrganizationPage(props: Props) {
             ) : (
               selectedCollection && (
                 <>
-                  <Thumbnail name={selectedCollection.name} preview={selectedCollection.preview} />
+                  <Thumbnail
+                    name={selectedCollection.name}
+                    preview={selectedCollection.preview}
+                    category={selectedCollection.category}
+                  />
                   <h3>{selectedCollection.name}</h3>
                   <Badge status={selectedCollection.status} />
                   <p>{selectedCollection.description}</p>
                   <h4>Why these are grouped</h4>
                   <p>{selectedCollection.relationship}</p>
+                  <p className="inline-warning">
+                    This collection has no bulk toggle. Select an individually supported component
+                    to review its operation plan. Inferred grouping never establishes ownership or
+                    permission to change shared files.
+                  </p>
                   <p>
                     {selectedCollection.unique_files} unique files ·{' '}
                     {selectedCollection.members.length} component references
@@ -620,7 +869,19 @@ export default function OrganizationPage(props: Props) {
                   </div>
                   <h4>Components</h4>
                   <Members members={selectedCollection.members} onSelect={selectMember} />
+                  <h4>Associated file groups</h4>
+                  <FileGroups files={selectedCollection.members.flatMap((m) => m.files)} />
                   <div className="button-row">
+                    {selectedCollection.automatic && (
+                      <button
+                        className="button"
+                        disabled={locked}
+                        onClick={() => edit(selectedCollection)}
+                      >
+                        <Pencil size={14} />
+                        Correct virtual folder
+                      </button>
+                    )}
                     {!selectedCollection.automatic && (
                       <>
                         <button
@@ -676,13 +937,19 @@ export default function OrganizationPage(props: Props) {
             onSubmit={(e) => {
               e.preventDefault();
               void mutate(() =>
-                call('save_collection', {
-                  id: editor === 'new' ? null : editor.id,
-                  name,
-                  description,
-                  category: editCategory,
-                  members,
-                }),
+                call(
+                  editor !== 'new' && editor.automatic ? 'save_virtual_group' : 'save_collection',
+                  {
+                    id: editor === 'new' ? null : editor.id,
+                    name,
+                    description,
+                    category: editCategory,
+                    members,
+                    ...(editor !== 'new' && editor.automatic
+                      ? { confirmed: relationshipConfirmed }
+                      : {}),
+                  },
+                ),
               ).then((ok) => {
                 if (ok) setEditor(null);
               });
@@ -722,6 +989,17 @@ export default function OrganizationPage(props: Props) {
                 Membership links reference existing records. Files, ownership and backups remain
                 with their original mods.
               </p>
+              {editor !== 'new' && editor.automatic && (
+                <label className="approval-inline">
+                  <input
+                    type="checkbox"
+                    checked={relationshipConfirmed}
+                    onChange={(e) => setRelationshipConfirmed(e.target.checked)}
+                  />
+                  I confirm these visual relationships from package documentation. This does not
+                  confirm compatibility or grant file-management authority.
+                </label>
+              )}
               <label>
                 Find components
                 <input
@@ -736,6 +1014,11 @@ export default function OrganizationPage(props: Props) {
                   <label key={refKey(m.reference)}>
                     <input
                       type="checkbox"
+                      aria-label={
+                        m.status === 'missing'
+                          ? `Include missing member ${m.reference.id}`
+                          : undefined
+                      }
                       checked={members.some((r) => refKey(r) === refKey(m.reference))}
                       onChange={(e) =>
                         setMembers((previous) =>
@@ -748,7 +1031,9 @@ export default function OrganizationPage(props: Props) {
                     <span>
                       {m.name}
                       <small>
-                        {m.role} · {m.source}
+                        {m.status === 'missing'
+                          ? `${m.role} · ${m.reference.kind} ${m.reference.id}`
+                          : `${m.role} · ${m.source}`}
                       </small>
                     </span>
                   </label>

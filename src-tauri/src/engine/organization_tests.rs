@@ -183,6 +183,23 @@ fn parent_status_reports_partial_unknown_and_missing_members() {
     assert_eq!(c.missing_members, 1);
     assert_eq!(c.status, "needs_review");
     assert_eq!(c.members.len(), 2);
+    let retained: Vec<_> = c
+        .members
+        .iter()
+        .filter(|m| m.status != "missing")
+        .map(|m| m.reference.clone())
+        .collect();
+    e.save_collection(Some(&id), "Mixed", "", "Custom", &retained)
+        .unwrap();
+    let updated = e
+        .organization_snapshot()
+        .unwrap()
+        .collections
+        .into_iter()
+        .find(|c| c.id == id)
+        .unwrap();
+    assert_eq!(updated.missing_members, 0);
+    assert_eq!(e.ownership(&m.id).unwrap().len(), 2);
 }
 #[test]
 fn declared_parent_children_do_not_duplicate_mod_records_or_unlock_shared_suits() {
@@ -375,8 +392,9 @@ fn loose_ped_metadata_is_read_only_bounded_and_never_unlocks_registry_edits() {
     let before = hash_file(&path).unwrap();
     let e = f.engine();
     let s = e.organization_snapshot().unwrap();
+    assert!(s.suits.is_empty());
     let suit = s
-        .suits
+        .candidates
         .iter()
         .find(|s| s.model.as_deref() == Some("synthetic_ped"))
         .unwrap();
@@ -462,8 +480,12 @@ fn character_resources_beyond_the_general_rpf_sample_are_bounded_and_grouped_by_
     let hash = hash_file(&archive).unwrap();
     let e = f.engine();
     let s = e.organization_snapshot().unwrap();
-    assert_eq!(s.suits.len(), 256);
-    assert!(s.suits.iter().all(|s| !s.manageable && s.model.is_none()));
+    assert!(s.suits.is_empty());
+    assert_eq!(s.candidates.len(), 256);
+    assert!(s
+        .candidates
+        .iter()
+        .all(|s| !s.manageable && s.model.is_none()));
     assert!(s
         .warnings
         .iter()
@@ -503,11 +525,12 @@ fn encrypted_addonpeds_archive_remains_unknown_and_unsafe_controls_stay_blocked(
     fs::write(&path, rpf_fixture(&["unknown.ydd".into()], 0x414553)).unwrap();
     let mut e = f.engine();
     let s = e.organization_snapshot().unwrap();
-    assert_eq!(s.suits.len(), 1);
-    assert_eq!(s.suits[0].model, None);
-    assert!(!s.suits[0].manageable);
-    assert!(e.prepare_suit(&s.suits[0].id, "disable").is_err());
-    assert!(s.suits[0].name.contains("Unknown archive contents"));
+    assert!(s.suits.is_empty());
+    assert_eq!(s.candidates.len(), 1);
+    assert_eq!(s.candidates[0].model, None);
+    assert!(!s.candidates[0].manageable);
+    assert!(e.prepare_suit(&s.candidates[0].id, "disable").is_err());
+    assert!(s.candidates[0].name.contains("Unknown archive contents"));
 }
 #[test]
 fn declared_artwork_uses_only_its_explicit_archive_reference() {
@@ -611,9 +634,10 @@ fn detection_budget_bounds_large_character_libraries_without_hashing_model_files
     let started = std::time::Instant::now();
     let e = f.engine();
     let s = e.organization_snapshot().unwrap();
-    assert_eq!(s.suits.len(), 2048);
+    assert!(s.suits.is_empty());
+    assert_eq!(s.candidates.len(), 2048);
     assert!(s.warnings.iter().any(|w| w.contains("2,048")));
     assert!(started.elapsed() < std::time::Duration::from_secs(8));
     assert_eq!(e.inventory().unwrap().unwrap().hashed_bytes, 0);
-    assert!(s.suits.iter().all(|s| !s.manageable));
+    assert!(s.candidates.iter().all(|s| !s.manageable));
 }

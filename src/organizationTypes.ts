@@ -7,7 +7,7 @@ export const suitCategories = [
   'Other / Unidentified',
 ] as const;
 export interface MemberRef {
-  kind: 'managed' | 'external' | 'suit';
+  kind: 'managed' | 'external' | 'suit' | 'collection';
   id: string;
 }
 export interface Component {
@@ -59,6 +59,15 @@ export interface OrganizationSnapshot {
   suits: Suit[];
   available_members: Component[];
   warnings: string[];
+  candidates?: Suit[];
+  unidentified?: Component[];
+  health?: HealthReport;
+}
+export interface HealthReport {
+  checked_at: number;
+  complete: boolean;
+  issues: { severity: string; subject: string; detail: string }[];
+  compatibility: string;
 }
 export const emptyOrganization: OrganizationSnapshot = {
   collections: [],

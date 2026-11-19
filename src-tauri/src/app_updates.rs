@@ -64,12 +64,20 @@ struct Receipt {
 }
 
 fn channel() -> Result<Channel> {
+    #[cfg(feature = "ui-qa")]
+    {
+        return Ok(Channel {
+            repository: None,
+            feed_url: None,
+            recovery_url: None,
+        });
+    }
     #[cfg(feature = "updater-qa")]
     {
         let bytes = std::fs::read(crate::updater_qa::root()?.join("channel.json"))?;
         return Ok(serde_json::from_slice(&bytes)?);
     }
-    #[cfg(not(feature = "updater-qa"))]
+    #[cfg(not(any(feature = "updater-qa", feature = "ui-qa")))]
     Ok(serde_json::from_str(include_str!(
         "../update-channel.json"
     ))?)
@@ -85,6 +93,9 @@ fn installed_path() -> Result<PathBuf> {
     )?)
 }
 fn eligible(install: &Path) -> Result<()> {
+    if cfg!(feature = "ui-qa") {
+        bail!("UI QA product cannot install application updates");
+    }
     check_tree(install)?;
     #[cfg(windows)]
     {
@@ -356,6 +367,9 @@ pub async fn approve(
     token: String,
     approved: bool,
 ) -> Result<()> {
+    if cfg!(feature = "ui-qa") {
+        bail!("UI QA product cannot download or install updates");
+    }
     if !approved {
         bail!("Download and installation require your explicit approval");
     }

@@ -1,0 +1,80 @@
+name: Approved release candidate
+run-name: candidate ${{ inputs.version }} ${{ inputs.request_id }}
+on:
+  workflow_dispatch:
+    inputs:
+      commit:
+        description: Reviewed full main commit SHA
+        required: true
+      version:
+        description: Reviewed stable version without v
+        required: true
+      request_id:
+        description: Unique request from the isolated release coordinator
+        required: true
+permissions:
+  contents: read
+concurrency:
+  group: release-candidate-${{ inputs.version }}
+  cancel-in-progress: false
+jobs:
+  candidate:
+    if: github.repository == 'zoxryn/zoxryn-mods' && github.ref == 'refs/heads/main'
+    runs-on: windows-2025
+    timeout-minutes: 60
+    permissions:
+      contents: read
+    env:
+      APPROVED_COMMIT: ${{ inputs.commit }}
+      RELEASE_VERSION: ${{ inputs.version }}
+      RELEASE_REQUEST: ${{ inputs.request_id }}
+      ZOXRYN_TEST_BROWSER: msedge
+    steps:
+      - name: Validate explicit request
+        shell: pwsh
+        run: |
+          if ($env:APPROVED_COMMIT -cnotmatch '^[0-9a-f]{40}$' -or $env:APPROVED_COMMIT -ne $env:GITHUB_SHA) { throw 'Reviewed commit must be the workflow main SHA' }
+          if ($env:RELEASE_VERSION -cnotmatch '^\d+\.\d+\.\d+$' -or $env:RELEASE_REQUEST -cnotmatch '^[0-9a-f]{32}$') { throw 'Invalid release request' }
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          ref: ${{ inputs.commit }}
+          persist-credentials: false
+      - uses: actions/setup-node@949feb2413d6458794dcd2491c4babbbce0c15c1 # v7.1.0
+        with:
+          node-version: '24'
+      - name: Prepare pinned build tools
+        shell: pwsh
+        run: |
+          npm install --global pnpm@11.25.0
+          if ($LASTEXITCODE) { throw 'pnpm setup failed' }
+          rustup toolchain install 1.100.0 --profile minimal
+          if ($LASTEXITCODE) { throw 'Rust setup failed' }
+          rustup default 1.100.0
+      - name: Regression tests, audits and unsigned production build
+        shell: pwsh
+        run: ./scripts/release/build-candidate.ps1
+      - uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
+        with:
+          name: candidate-${{ inputs.request_id }}
+          path: release-assets/*
+          if-no-files-found: error
+          retention-days: 7
+  attest:
+    needs: candidate
+    runs-on: windows-2025
+    timeout-minutes: 10
+    permissions:
+      contents: read
+      actions: read
+      id-token: write
+      attestations: write
+    steps:
+      - uses: actions/download-artifact@9000827ccba6bdab643e8b6fd33ac0654aef8333 # v8.0.2
+        with:
+          name: candidate-${{ inputs.request_id }}
+          path: release-assets
+      - name: Attest immutable candidate data without executing checkout code
+        uses: actions/attest-build-provenance@4d101475d8b20a2381f78447822ac1eab6504dd8 # v4.2.2
+        with:
+          subject-path: release-assets/*
+# No production key, release permission, push/PR trigger or publication job lives here.

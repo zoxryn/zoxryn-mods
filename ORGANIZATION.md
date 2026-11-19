@@ -1,6 +1,24 @@
 # Collections, suits and previews
 
-Version 0.1.8 continues the existing application and signed updater. Collections organize references; they never acquire a second copy of file ownership.
+Version 0.1.9 continues the existing application and signed updater. Collections organize references; they never acquire a second copy of file ownership. Schema 3 remains unchanged; additional visual metadata uses backward-compatible JSON defaults.
+
+The final focused pass adds a character/package browser and lazy expandable outfit file groups. Category icons have focus/hover hints (Escape dismisses them) and a visible selected-category label. Detected means presence only: it does not establish an enabled state or compatibility. Inspect a component's management explanation before using any reviewed transaction.
+
+Exact known hero loader names may reference a single matching descriptive sibling data directory; multiple versions remain ambiguous. A supporting DLL alone does not establish a nested package. Separate police/callout packages stay separate, while recognized LSPDFR core markers reference one virtual core group. None of these relationships changes ownership.
+
+Automatic external artwork requires a validated local `zoxryn.json` `organization.preview` or suit `preview` naming an existing package-relative raster file. PNG/JPEG/WebP images use the existing 8 MiB, 4-megapixel validation and sanitized cache. Artwork decoding is bounded to 32 uncached images and 16 MiB per organization snapshot; excess images use placeholders. Metadata fingerprints reuse cached images. Reparse/path escapes and malformed images are rejected. Artwork is an author-supplied visual association, not proof of authenticity. Category-specific geometric placeholders are original artwork; no actual mod pictures are invented.
+
+## Smart Mod Folders in 0.1.9
+
+Imported archive ownership, bounded local `zoxryn.json` declarations, descriptive parent directories and supported loading boundaries provide different levels of evidence. Explicit declarations do not prove creator authenticity or runtime compatibility; inferred folder groups remain labelled as such. Generic `Sounds`, `Suits`, `Config`, `Models` and `Textures` folders are components of their package rather than separate mods. Exact unique local loader/sidecar relationships may be grouped; filename similarity alone cannot merge packages. Nested directories with their own entrypoints can remain separate child packages.
+
+The same rules apply to superhero, police, vehicle, weapon, map/graphics, character/ped, tool and general script packages. Bounded descriptive folder mappings include Spider-Man, Hulk, Batman, Iron Man and Superman. Police & LSPDFR offers core, callout, plugin, vehicle, uniform/ped and audio sections. RAGE Plugin Hook retains a canonical shared-tool collection and appears by reference in the police view and applicable dependents; support files are not duplicated into owned records. Separate callout/plugin loading boundaries are not merged into a single managed mod.
+
+**Correct virtual folder** changes a parent label, category or membership in SQLite metadata. **Unidentified Files** can assign an unresolved reference to a virtual parent, or explicitly confirm a documented outfit identity. Neither action moves game files, alters ownership, confirms compatibility or unlocks controls. Removed/uncertain references remain recoverable through raw scanner evidence. Missing custom members can be removed one at a time. Unique file counts include their game/package scope, preventing identical relative filenames in different game directories from being collapsed; ownership keys are unchanged.
+
+The gallery contains named, explicitly declared or manually confirmed outfits. Generic `.ymt`, model, texture, metadata and archive clues are retained outside it. A named external outfit does not imply AddonPeds registration or independent manageability. Already declared loose outfit resources do not create duplicate generic gallery candidates. Advanced File Inspector retains the original scan rows, sampled resource names, warnings, paths and confidence information.
+
+**Mod Health Check** refreshes read-only evidence and reports missing declared/detected dependencies, scanner conflicts, incomplete/stale coverage, missing tracked targets and recovery warnings, with a bounded issue list. It does not execute mods, certify compatibility, hash every large RPF/backup, repair installations or bypass approvals. Backup bytes and current target hashes are verified by the existing transaction engine before approved changes.
 
 ## Reliable grouping
 
@@ -23,7 +41,9 @@ The six suit categories are Superhero Suits, Police Uniforms, Custom Peds, Chara
 | Encrypted/unsupported AddonPeds RPF | Unknown archive candidate with blocked controls |
 | Original game RPF, nested/encrypted archive payload, arbitrary binary registry, or unknown package metadata | No unsupported decoding or registry editing |
 
-Loose ped XML is at most 256 KiB, parsed without DTD/entities, with bounded nodes/depth/model names. General scanning limits still apply. RPF character clues are capped at 256 per archive and the suit view at 2,048 candidates, with warnings when limits are reached. Large model/RPF payloads are not hashed for organization. Discovery cannot prove that a resource differs from the original game or that a declared model is registered or usable. Rescan refreshes external evidence; stored older scans may need a rescan for new resource metadata.
+Loose ped XML is at most 256 KiB, parsed without DTD/entities, with bounded nodes/depth/model names. General scanning limits still apply. RPF character clues are capped at 256 per archive; named outfits and unknown clues have bounded budgets, with warnings when limits are reached. Unknown clues go to Unidentified Files rather than the gallery. Large model/RPF payloads are not hashed for organization. Discovery cannot prove that a resource differs from the original game or that a declared model is registered or usable. Rescan refreshes external evidence; stored older scans may need a rescan for new resource metadata.
+
+External local `zoxryn.json` reads are limited to 256 KiB within the existing 32 MiB scan-read budget. Exact suit file references must be descendants of that package and exist in the inventory; paths/declarations are validated and no metadata code is executed. Dependency lists are bounded to 64 short identifiers. A sorted path index avoids rescanning the complete inventory for every manifest. These declarations are for browsing; external assets remain outside canonical management until separately supported and approved.
 
 ## Safe individual enable/disable
 

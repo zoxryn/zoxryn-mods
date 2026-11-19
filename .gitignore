@@ -11,6 +11,8 @@ build-cache/
 .rustup/
 src-tauri/gen/
 *.tsbuildinfo
+__pycache__/
+*.pyc
 *.log
 *.tmp
 *.dmp

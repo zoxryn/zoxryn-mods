@@ -1,6 +1,7 @@
 pub mod archive;
 pub mod engine;
 pub mod game;
+pub mod grouping;
 pub mod model;
 pub mod organization;
 pub mod previews;

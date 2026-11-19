@@ -29,7 +29,7 @@ $hook=Join-Path $root 'installer-hooks.nsh'
 !macroend
 '@|Set-Content -LiteralPath $hook
 foreach($version in @($FromVersion,$ToVersion)){
- $config=@{productName='Zoxryn Mods Updater QA';mainBinaryName='zoxryn-mods-updater-qa';version=$version;identifier='com.zoxryn.mods';app=@{windows=@(@{label='main';title='Zoxryn Mods Updater QA';url='qa.html';width=900;height=700;visible=$false;dataDirectory=(Join-Path $root 'webview')})};bundle=@{createUpdaterArtifacts=$true;windows=@{nsis=@{installMode='currentUser';startMenuFolder='Zoxryn Mods Updater QA';installerHooks=$hook}}};plugins=@{updater=@{pubkey=$key;endpoints=@();requireSignedVersion=$true;dangerousInsecureTransportProtocol=$true;windows=@{installMode='quiet'}}}}
+ $config=@{productName='Zoxryn Mods Updater QA';mainBinaryName='zoxryn-mods-updater-qa';version=$version;identifier='com.zoxryn.mods.updater-qa';app=@{windows=@(@{label='main';title='Zoxryn Mods Updater QA';url='qa.html';width=900;height=700;visible=$false;dataDirectory=(Join-Path $root 'webview')})};bundle=@{createUpdaterArtifacts=$true;windows=@{nsis=@{installMode='currentUser';startMenuFolder='Zoxryn Mods Updater QA';installerHooks=$hook}}};plugins=@{updater=@{pubkey=$key;endpoints=@();requireSignedVersion=$true;dangerousInsecureTransportProtocol=$true;windows=@{installMode='quiet'}}}}
  $config|ConvertTo-Json -Depth 30|Set-Content -LiteralPath (Join-Path $root "tauri-$version.json")
 }
 Write-Output 'Synthetic updater fixture and loopback-only test server are ready. Real application registration and data are not used.'

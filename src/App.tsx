@@ -45,6 +45,7 @@ import {
   Upload,
   X,
   Zap,
+  FileSearch,
 } from 'lucide-react';
 import { browserPreview, call, pick } from './api';
 import { providers } from './providers';
@@ -53,15 +54,36 @@ import { UpdateSettings, UpdatePrompt } from './AppUpdates';
 import InstalledMods, { inventoryCounts } from './InstalledMods';
 import OrganizationPage from './OrganizationPage';
 import { emptyOrganization, type OrganizationSnapshot } from './organizationTypes';
+import {
+  AppearanceSettings,
+  CollectionMetrics,
+  GlobalSearch,
+  NeonTitleBar,
+  PerformanceInfo,
+  useAppearance,
+} from './NeonShell';
+import FileGroups from './FileGroups';
+import Thumbnail from './Thumbnail';
+import UnidentifiedFiles from './UnidentifiedFiles';
+import ModHealth from './ModHealth';
 import type { Backup, Game, Mod, Plan, Report, Snapshot, ScanInventory } from './types';
 
 type View =
-  'dashboard' | 'installed' | 'library' | 'suits' | 'game' | 'backups' | 'discover' | 'settings';
+  | 'dashboard'
+  | 'installed'
+  | 'library'
+  | 'suits'
+  | 'unidentified'
+  | 'game'
+  | 'backups'
+  | 'discover'
+  | 'settings';
 const nav = [
   { id: 'dashboard', label: 'Overview', icon: LayoutDashboard },
   { id: 'installed', label: 'Installed Mods', icon: PackageCheck },
-  { id: 'library', label: 'My library', icon: Library },
+  { id: 'library', label: 'My Mods', icon: Library },
   { id: 'suits', label: 'Suits & Skins', icon: Shirt },
+  { id: 'unidentified', label: 'Unidentified Files', icon: FileSearch },
   { id: 'discover', label: 'Discover mods', icon: Sparkles },
   { id: 'game', label: 'Game & dependencies', icon: Gamepad2 },
   { id: 'backups', label: 'Backups & recovery', icon: Archive },
@@ -183,6 +205,7 @@ function City() {
 
 export default function App() {
   const updates = useAppUpdates();
+  const appearance = useAppearance();
   const [data, setData] = useState<Snapshot>({
     game: null,
     mods: [],
@@ -195,6 +218,8 @@ export default function App() {
   });
   const [view, setView] = useState<View>('dashboard');
   const [libraryMode, setLibraryMode] = useState<'collections' | 'individual'>('collections');
+  const [organizationSelection, setOrganizationSelection] = useState<string | null>(null);
+  const [advancedInspector, setAdvancedInspector] = useState(false);
   const [organization, setOrganization] = useState<OrganizationSnapshot>(emptyOrganization);
   const [organizationLoading, setOrganizationLoading] = useState(false);
   const [organizationError, setOrganizationError] = useState<string | null>(null);
@@ -215,7 +240,7 @@ export default function App() {
     }
   }, []);
   useEffect(() => {
-    if (view === 'library' || view === 'suits') void refreshOrganization();
+    void refreshOrganization();
   }, [view, data.mods, data.inventory, refreshOrganization]);
   const [query, setQuery] = useState('');
   const [category, setCategory] = useState('All categories');
@@ -413,6 +438,12 @@ export default function App() {
     });
   }
   const game = data.game;
+  const healthCheck = () =>
+    void task(async () => {
+      await call('mod_health_check');
+      await refresh();
+      await refreshOrganization();
+    });
   const planIsRelease =
     plan?.operation === 'remove' && data.mods.some((m) => m.id === plan.mod_id && !!m.adopted_from);
   const detected = inventoryCounts(data.inventory, data.mods);
@@ -597,7 +628,15 @@ export default function App() {
     );
   }
   return (
-    <div className="app-shell">
+    <div className="app-shell" data-view={view}>
+      <NeonTitleBar
+        connected={game?.edition === 'Legacy'}
+        update={updates.status.available_version}
+        onUpdates={() => {
+          setView('settings');
+          if (updates.status.available_version) updates.setPrompt(true);
+        }}
+      />
       <UpdatePrompt updates={updates} fileBusy={busy || scanning} />
       <aside className="sidebar">
         <a
@@ -619,6 +658,9 @@ export default function App() {
           {nav.map((item) => (
             <button
               key={item.id}
+              aria-label={item.label}
+              title={item.label}
+              aria-current={view === item.id ? 'page' : undefined}
               className={view === item.id ? 'nav-item active' : 'nav-item'}
               onClick={() => setView(item.id)}
             >
@@ -646,12 +688,19 @@ export default function App() {
           </div>
           <button
             className={`nav-item ${view === 'settings' ? 'active' : ''}`}
+            aria-label="Settings"
+            title="Settings"
             onClick={() => setView('settings')}
           >
             <Settings2 size={18} />
             Settings
           </button>
-          <button className="nav-item" onClick={() => setSafety(true)}>
+          <button
+            className="nav-item"
+            aria-label="Help & getting started"
+            title="Help & getting started"
+            onClick={() => setSafety(true)}
+          >
             <CircleHelp size={18} />
             Help & getting started
           </button>
@@ -664,21 +713,47 @@ export default function App() {
       <div className="main-shell">
         <header className="topbar">
           <div className="breadcrumb">
-            Workspace
+            <span className="neon-workspace-label">NEON COLLECTION</span>
             <ChevronRight size={13} />
             <strong>{currentName}</strong>
           </div>
+          <GlobalSearch
+            data={organization}
+            onSuit={(id) => {
+              setOrganizationSelection(id);
+              setView('suits');
+            }}
+            onCollection={(id) => {
+              setOrganizationSelection(id);
+              setLibraryMode('collections');
+              setView('library');
+            }}
+            onMod={(id) => setSelected(data.mods.find((m) => m.id === id) ?? null)}
+          />
           <div className="topbar-right">
+            {['library', 'installed', 'suits'].includes(view) && (
+              <button className="button primary" disabled={busy} onClick={() => void importMod()}>
+                <Plus size={15} />
+                Import mod
+              </button>
+            )}
+            {iconButton('Run Mod Health Check', <ShieldCheck size={18} />, healthCheck)}
             <span className="singleplayer">
               <ShieldCheck size={13} />
               Single-player only
             </span>
             <span className="vertical-divider" />
-            {iconButton('Show safety information', <Bell size={17} />, () => setSafety(true))}
+            {iconButton('Show safety information', <ShieldCheck size={17} />, () =>
+              setSafety(true),
+            )}
             <div className="avatar">Z</div>
           </div>
         </header>
-        <main>
+        <main
+          className={
+            ['library', 'installed', 'suits'].includes(view) ? 'collection-main' : undefined
+          }
+        >
           {browserPreview && (
             <div className="preview-banner">
               <FileCheck2 size={15} />
@@ -709,9 +784,11 @@ export default function App() {
                               : 'A lightweight workspace that keeps your records on this PC.'}
               </p>
             </div>
-            <button className="button primary" onClick={() => void importMod()} disabled={busy}>
-              {busy ? <LoaderCircle className="spin" size={16} /> : <Plus size={17} />}Import mod
-            </button>
+            {!['library', 'installed', 'suits'].includes(view) && (
+              <button className="button primary" onClick={() => void importMod()} disabled={busy}>
+                {busy ? <LoaderCircle className="spin" size={16} /> : <Plus size={17} />}Import mod
+              </button>
+            )}
           </div>
           {data.recovery.length > 0 && (
             <div className="alert danger">
@@ -738,6 +815,17 @@ export default function App() {
           )}
           {view === 'dashboard' && (
             <>
+              <CollectionMetrics
+                data={organization}
+                backups={data.backups.length}
+                backupBytes={bytes(data.backup_bytes)}
+                onNavigate={setView}
+              />
+              <ModHealth
+                health={organization.health}
+                busy={busy || scanning}
+                onCheck={healthCheck}
+              />
               <section className="hero">
                 <div className="hero-copy">
                   <span className="pill">
@@ -904,6 +992,36 @@ export default function App() {
             </>
           )}
           {view === 'installed' && (
+            <div className="org-library-tabs" role="tablist" aria-label="Installed mod views">
+              <button
+                className="button"
+                role="tab"
+                aria-selected={!advancedInspector}
+                onClick={() => setAdvancedInspector(false)}
+              >
+                Organized packages
+              </button>
+              <button
+                className="button"
+                role="tab"
+                aria-selected={advancedInspector}
+                onClick={() => setAdvancedInspector(true)}
+              >
+                Advanced File Inspector
+              </button>
+              {!advancedInspector && (
+                <button
+                  className="button"
+                  disabled={busy || scanning || !game}
+                  onClick={() => void rescan()}
+                >
+                  <RefreshCw size={14} />
+                  Rescan
+                </button>
+              )}
+            </div>
+          )}
+          {view === 'installed' && advancedInspector && (
             <InstalledMods
               inventory={data.inventory}
               mods={data.mods}
@@ -935,10 +1053,13 @@ export default function App() {
               </button>
             </div>
           )}
-          {(view === 'suits' || (view === 'library' && libraryMode === 'collections')) && (
+          {(view === 'suits' ||
+            (view === 'installed' && !advancedInspector) ||
+            (view === 'library' && libraryMode === 'collections')) && (
             <OrganizationPage
               key={view}
               mode={view === 'suits' ? 'suits' : 'collections'}
+              focusId={organizationSelection}
               data={organization}
               loading={organizationLoading}
               error={organizationError}
@@ -947,6 +1068,18 @@ export default function App() {
               onBusy={setBusy}
               onReviewSuit={(id, op) => void suitOperation(id, op)}
               onParent={(id) => setSelected(data.mods.find((m) => m.id === id) ?? null)}
+            />
+          )}
+          {view === 'unidentified' && (
+            <UnidentifiedFiles
+              data={organization}
+              busy={busy || updates.active}
+              onBusy={setBusy}
+              onRefresh={refreshOrganization}
+              onAdvanced={() => {
+                setView('installed');
+                setAdvancedInspector(true);
+              }}
             />
           )}
           {view === 'library' && libraryMode === 'individual' && (
@@ -1156,6 +1289,34 @@ export default function App() {
           )}
           {view === 'discover' && (
             <>
+              <div className="discover-categories" aria-label="Discovery categories">
+                {[
+                  'Police & LSPDFR',
+                  'Superheroes',
+                  'Vehicles',
+                  'Scripts',
+                  'Peds & Skins',
+                  'Weapons',
+                  'Maps',
+                  'Graphics',
+                ].map((name, i) => (
+                  <button
+                    key={name}
+                    className="discovery-category"
+                    onClick={() =>
+                      void task(async () => {
+                        await call('open_official', { id: i === 0 ? 'lcpdfr' : 'gta5mods' });
+                      })
+                    }
+                  >
+                    <span>{['◈', '✧', '◇', '⌘', '♙', '✣', '⌖', '◌'][i]}</span>
+                    <strong>{name}</strong>
+                    <small>
+                      Browse publisher website <ExternalLink size={11} />
+                    </small>
+                  </button>
+                ))}
+              </div>
               <div className="alert">
                 <Download size={19} />
                 <div>
@@ -1217,13 +1378,23 @@ export default function App() {
           )}
           {view === 'settings' && (
             <section className="panel padded settings-panel">
+              <section className="neon-settings-section">
+                <span className="eyebrow">YOUR WORKSPACE</span>
+                <h2>General</h2>
+                <p>
+                  Local-first management for GTA V Legacy single-player. Every game-file change
+                  requires your approval.
+                </p>
+              </section>
+              <AppearanceSettings {...appearance} />
+              <PerformanceInfo />
               <UpdateSettings updates={updates} fileBusy={busy || scanning} />
               <div className="settings-row">
                 <span className="settings-icon">
                   <Database size={24} />
                 </span>
                 <div>
-                  <h2>Local records & backups</h2>
+                  <h2>Mod library & backups</h2>
                   <p>
                     SQLite records, retained archives, and versioned file backups. Kept outside the
                     application directory so updates preserve your library.
@@ -1279,7 +1450,7 @@ export default function App() {
                   <SlidersHorizontal size={24} />
                 </span>
                 <div>
-                  <h2>Game preference</h2>
+                  <h2>GTA V installation</h2>
                   <p>
                     The selected game directory and its launcher are remembered between sessions.
                   </p>
@@ -1289,6 +1460,17 @@ export default function App() {
                   <ArrowRight size={15} />
                 </button>
               </div>
+              <section className="neon-settings-section about-zoxryn">
+                <span className="neon-z">Z</span>
+                <div>
+                  <span className="eyebrow">NEON COLLECTION</span>
+                  <h2>About Zoxryn Mods</h2>
+                  <p>
+                    Version {packageVersion} · Windows 11 x64 · Built for your local mod collection.
+                  </p>
+                  <p>Original Zoxryn artwork and interface. Tauri, React, Rust & SQLite.</p>
+                </div>
+              </section>
             </section>
           )}
           <footer className="main-footer">
@@ -1297,7 +1479,7 @@ export default function App() {
               Built for single-player. Designed to keep you in control.
             </span>
             <span>
-              ZOXRYN MODS <b>PHASE 1.7</b>
+              ZOXRYN MODS <b>NEON COLLECTION</b>
             </span>
           </footer>
         </main>
@@ -1321,7 +1503,12 @@ export default function App() {
             if (e.target === e.currentTarget) setSelected(null);
           }}
         >
-          <section className="modal" role="dialog" aria-modal="true" aria-label="Mod details">
+          <section
+            className="modal mod-inspector"
+            role="dialog"
+            aria-modal="true"
+            aria-label="Mod details"
+          >
             <div className="modal-heading">
               <div>
                 <div className="eyebrow">ARCHIVE INSPECTION</div>
@@ -1330,6 +1517,15 @@ export default function App() {
               {iconButton('Close details', <X size={19} />, () => setSelected(null))}
             </div>
             <div className="modal-body">
+              <Thumbnail
+                name={selected.name}
+                category={selected.category}
+                preview={
+                  organization.available_members.find(
+                    (m) => m.reference.kind === 'managed' && m.reference.id === selected.id,
+                  )?.preview ?? null
+                }
+              />
               <div className="detail-badges">
                 <Status status={selected.status} />
                 <span className="category-label">{selected.kind}</span>
@@ -1387,15 +1583,7 @@ export default function App() {
               <h3>
                 {selected.files.length ? 'Supported file targets' : 'Manual installation required'}
               </h3>
-              <div className="file-list">
-                {selected.files.map((f) => (
-                  <div key={f.target}>
-                    <FileCheck2 size={15} />
-                    <code>{f.target}</code>
-                    <small>{bytes(f.size)}</small>
-                  </div>
-                ))}
-              </div>
+              <FileGroups files={selected.files.map((f) => f.target)} />
               {selected.instructions && (
                 <>
                   <h3>Installation instructions</h3>

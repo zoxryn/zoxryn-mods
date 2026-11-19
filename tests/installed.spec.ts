@@ -218,6 +218,7 @@ test('installed inventory distinguishes components, containers, unknown files an
   await bridge(page);
   await page.goto('/');
   await page.getByRole('button', { name: 'Installed Mods', exact: true }).click();
+  await page.getByRole('tab', { name: 'Advanced File Inspector' }).click();
   await expect(page.getByRole('button', { name: 'Traffic Scripts', exact: false })).toBeVisible();
   await expect(page.getByText('Unknown files', { exact: true })).toBeVisible();
   await expect(page.getByText('Container cannot be safely isolated')).toBeVisible();
@@ -233,6 +234,7 @@ test('search categories source status and sorting inspect actual inventory metad
   await bridge(page);
   await page.goto('/');
   await page.getByRole('button', { name: 'Installed Mods', exact: true }).click();
+  await page.getByRole('tab', { name: 'Advanced File Inspector' }).click();
   await page.getByLabel('Search installed mods').fill('adder.yft');
   await page.getByLabel('Installed category').selectOption('Vehicles');
   await page.getByLabel('Installation source').selectOption('OpenIV');
@@ -255,6 +257,7 @@ test('adoption needs independent ownership approval and keeps Manual origin afte
   await bridge(page);
   await page.goto('/');
   await page.getByRole('button', { name: 'Installed Mods', exact: true }).click();
+  await page.getByRole('tab', { name: 'Advanced File Inspector' }).click();
   await page
     .getByRole('row')
     .filter({ hasText: 'Traffic' })
@@ -284,11 +287,13 @@ test('a pending scan does not block navigation and rescan invokes only read-only
   await bridge(page, true);
   await page.goto('/');
   await page.getByRole('button', { name: 'Installed Mods', exact: true }).click();
+  await page.getByRole('tab', { name: 'Advanced File Inspector' }).click();
   await expect(page.getByRole('button', { name: 'Scanning…', exact: true })).toBeVisible();
   await page.getByRole('button', { name: 'Settings', exact: true }).click();
   await expect(page.getByRole('heading', { name: 'Approval before every change' })).toBeVisible();
   await page.evaluate(() => (window as any).releaseScan());
   await page.getByRole('button', { name: 'Installed Mods', exact: true }).click();
+  await page.getByRole('tab', { name: 'Advanced File Inspector' }).click();
   await expect(page.getByRole('button', { name: 'Rescan', exact: true })).toBeEnabled();
   await page.getByRole('button', { name: 'Rescan', exact: true }).click();
   await expect(page.getByRole('button', { name: 'Scanning…', exact: true })).toBeVisible();
@@ -302,6 +307,7 @@ test('installed page fits minimum window width and has a bounded table page', as
   await page.setViewportSize({ width: 1000, height: 700 });
   await page.goto('/');
   await page.getByRole('button', { name: 'Installed Mods', exact: true }).click();
+  await page.getByRole('tab', { name: 'Advanced File Inspector' }).click();
   expect(await page.evaluate(() => document.documentElement.scrollWidth <= innerWidth)).toBe(true);
   await expect(page.getByText('items · showing up to 50 per page', { exact: false })).toBeVisible();
   await page.screenshot({ path: 'test-results/installed-mods-minimum.png', fullPage: true });

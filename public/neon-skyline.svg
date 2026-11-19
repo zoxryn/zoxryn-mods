@@ -1,0 +1,12 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1600 160" preserveAspectRatio="xMidYMid slice">
+<!-- Original geometric skyline drawn for Zoxryn Mods. No game or character artwork. -->
+<defs><linearGradient id="sky" x2="0" y2="1"><stop stop-color="#190d27"/><stop offset=".6" stop-color="#542270"/><stop offset="1" stop-color="#bd5ceb"/></linearGradient><linearGradient id="fade"><stop stop-color="#08080c"/><stop offset=".25" stop-color="#09080d" stop-opacity="0"/><stop offset=".8" stop-color="#09080d" stop-opacity="0"/><stop offset="1" stop-color="#09080d"/></linearGradient><pattern id="lights" width="16" height="14" patternUnits="userSpaceOnUse"><rect x="4" y="4" width="3" height="2" fill="#be8bda" opacity=".34"/></pattern><g id="palm"><path d="M-3 140Q6 79 0 28H5Q13 81 8 140Z" fill="#09090e"/><path d="M3 30Q-25-4-47 22Q-14 15 3 33Q-37 8-52 43Q-15 29 4 34Q-14 39-17 68Q-3 45 6 33Q21 12 52 27Q37 0 8 28Q37 21 55 53Q49 11 6 31Q10 2 28 1Q4-8 3 30Z" fill="#0a0910"/></g></defs>
+<rect width="1600" height="160" fill="url(#sky)"/>
+<path d="M100 27Q270 8 470 33T860 24T1320 21L1450 38Q1240 21 1040 48T650 48T220 49Z" fill="#9e47ba" opacity=".15"/>
+<path d="M0 135H290V118H340V101H367V111H409V80H441V61H459V40H485V59H503V136H526V96H554V112H584V73H614V52H640V25H654V15H672V30H682V123H702V86H734V65H759V31H790V18H805V8H823V26H831V129H855V75H889V97H910V57H933V41H955V19H969V47H980V140H1013V85H1054V116H1090V95H1128V116H1170V106H1204V130H1600V160H0Z" fill="#170d22"/>
+<path d="M290 135V118H340V101H367V111H409V80H441V61H459V40H485V59H503V136H526V96H554V112H584V73H614V52H640V25H654V15H672V30H682V123H702V86H734V65H759V31H790V18H805V8H823V26H831V129H855V75H889V97H910V57H933V41H955V19H969V47H980V140H1013V85H1054V116H1090V95H1128V116H1170V106H1204V130H1300V150H290Z" fill="url(#lights)"/>
+<path d="M0 150H320V138H348V129H387V141H432V126H456V136H493V146H562V133H603V140H658V124H696V145H732V134H775V141H818V126H846V139H909V132H947V143H1020V127H1055V139H1098V133H1126V147H1600V160H0Z" fill="#100b18"/>
+<use href="#palm" transform="translate(305 0) scale(.95)"/><use href="#palm" transform="translate(375 29) scale(.78)"/><use href="#palm" transform="translate(1180 4) scale(.97)"/><use href="#palm" transform="translate(1270 30) scale(.76)"/>
+<path d="m529 47 55-2 15 6-7 9h-32l-8-10-30-2Zm33-7h30v3h-30zm17-6h3v7h-3zm-4 27h20v3h-20z" fill="#150d1e"/>
+<path d="M0 158H1600" stroke="#c465f1" stroke-width="2" opacity=".75"/><rect width="1600" height="160" fill="url(#fade)"/>
+</svg>

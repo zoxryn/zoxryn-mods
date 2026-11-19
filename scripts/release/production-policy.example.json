@@ -1,0 +1,33 @@
+{
+  "enabled": false,
+  "repository": "zoxryn/zoxryn-mods",
+  "repository_id": 1463035623,
+  "host": "UNPROVISIONED-ISOLATED-SIGNER",
+  "user_sid": "UNPROVISIONED",
+  "control_root": "D:/ZoxrynReleaseControl",
+  "work_root": "D:/ZoxrynReleaseWork",
+  "vault": "D:/ZoxrynSigningVault",
+  "public_key": "dW50cnVzdGVkIGNvbW1lbnQ6IG1pbmlzaWduIHB1YmxpYyBrZXk6IEM0MUM3OUQzQUM2ODc3ODQKUldTRWQyaXMwM2tjeE5Nd0NYV3FuaGxtMFNtQW9VckhrMzlOeDFZdkRhaGpDWm94cTczdk9NY1gK",
+  "tools": {
+    "gh": {
+      "path": "D:/ZoxrynReleaseControl/gh.exe",
+      "sha256": "UNPROVISIONED"
+    },
+    "signer": {
+      "path": "D:/ZoxrynReleaseControl/cargo-tauri.exe",
+      "sha256": "UNPROVISIONED"
+    },
+    "verifier": {
+      "path": "D:/ZoxrynReleaseControl/verify_release_signatures.exe",
+      "sha256": "UNPROVISIONED"
+    },
+    "sign_bridge": {
+      "path": "D:/ZoxrynReleaseControl/sign-approved.ps1",
+      "sha256": "UNPROVISIONED"
+    },
+    "python": {
+      "path": "D:/ZoxrynReleaseControl/python.exe",
+      "sha256": "UNPROVISIONED"
+    }
+  }
+}

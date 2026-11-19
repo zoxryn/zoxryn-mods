@@ -1,288 +1,60 @@
-import { test, expect, type Page } from '@playwright/test';
-async function bridge(page: Page, large = false) {
-  await page.addInitScript(
-    ({ large }) => {
-      const w = window as any;
-      w.isTauri = true;
-      w.calls = [];
-      let callback = 0;
-      const game = {
-        path: 'C:/SyntheticGame',
-        edition: 'Legacy',
-        launcher: 'Synthetic fixture',
-        version: null,
-        prerequisites: [
-          { id: 'shvdn', name: 'ScriptHookVDotNet', present: true, detail: 'Synthetic', url: '' },
-        ],
-        warnings: [],
-      };
-      const mod = {
-        id: 'solar-parent',
-        name: 'Solar Package',
-        author: 'Synthetic fixture',
-        version: '1',
-        category: 'Characters',
-        source: 'Local archive',
-        imported_at: 1700000000,
-        installed_at: 1700000000,
-        status: 'enabled',
-        archive_path: 'C:/SyntheticData/package.zip',
-        archive_hash: 'fixture',
-        kind: 'Script',
-        edition: 'Legacy',
-        requirements: ['shvdn'],
-        supported_builds: [],
-        warnings: [],
-        instructions: 'Synthetic fixture only',
-        files: [
-          {
-            archive_entry: 'scripts/Solar.cs',
-            target: 'scripts/Solar.cs',
-            hash: 'fixture',
-            size: 10,
-          },
-        ],
-      };
-      const main = {
-        reference: { kind: 'managed', id: mod.id },
-        name: mod.name,
-        category: 'Characters',
-        status: 'enabled',
-        source: 'Zoxryn',
-        location: game.path,
-        files: ['scripts/Solar.cs'],
-        dependencies: ['shvdn'],
-        role: 'Managed package',
-        control_reason: 'Reviewed canonical ownership',
-        mod_id: mod.id,
-        preview: null,
-      };
-      const solar = {
-        id: 'solar-suit',
-        name: 'Solar Suit',
-        category: 'Superhero Suits',
-        model: 'player_zero',
-        parent: mod.name,
-        source: 'Zoxryn',
-        status: 'enabled',
-        files: ['scripts/Solar.cs'],
-        dependencies: ['shvdn'],
-        conflicts: [],
-        notes: ['Synthetic suit metadata'],
-        manageable: true,
-        control_reason:
-          'Independent script-based suit package; complete package is reviewed. This does not equip a suit.',
-        mod_id: mod.id,
-        preview: null,
-      };
-      const unknown = {
-        ...solar,
-        id: 'archive-suit',
-        name: 'Resource: unknown_uppr.ydd',
-        category: 'Other / Unidentified',
-        model: null,
-        parent: 'Shared OpenIV archive',
-        source: 'OpenIV',
-        status: 'needs_review',
-        files: ['mods/update/x64/dlcpacks/fixture/dlc.rpf :: unknown_uppr.ydd'],
-        manageable: false,
-        control_reason: 'Shared RPF contents and AddonPeds registration cannot be safely isolated.',
-        mod_id: null,
-      };
-      const child = {
-        reference: { kind: 'suit', id: solar.id },
-        name: solar.name,
-        category: solar.category,
-        status: 'enabled',
-        source: 'Zoxryn',
-        location: solar.files[0],
-        files: solar.files,
-        dependencies: solar.dependencies,
-        role: 'Independently manageable suit',
-        control_reason: solar.control_reason,
-        mod_id: mod.id,
-        preview: null,
-      };
-      const collection = {
-        id: 'package:solar-parent',
-        name: 'Hero Collection',
-        description: 'An explicitly declared package boundary',
-        category: 'Superheroes',
-        automatic: true,
-        relationship: 'Imported archive and canonical package ownership',
-        status: 'enabled',
-        preview: null,
-        members: [main, child],
-        unique_files: 1,
-        missing_members: 0,
-      };
-      const org = {
-        collections: [collection],
-        suits: large
-          ? Array.from({ length: 1000 }, (_, i) => ({
-              ...unknown,
-              id: `outfit-${i}`,
-              name: `Outfit ${String(i).padStart(4, '0')}`,
-              preview: String(i).padStart(64, '0'),
-            }))
-          : [solar, unknown],
-        available_members: [main, child],
-        warnings: [],
-      };
-      w.organizationState = org;
-      w.__TAURI_INTERNALS__ = {
-        transformCallback: () => ++callback,
-        unregisterCallback: () => {},
-        invoke: async (cmd: string, args: any) => {
-          w.calls.push({ cmd, args });
-          if (cmd === 'plugin:event|listen') return 1;
-          if (cmd === 'plugin:event|unlisten') return;
-          if (cmd === 'check_app_update' || cmd === 'update_status')
-            return {
-              installed_version: '0.1.8',
-              configured: true,
-              phase: 'up_to_date',
-              available_version: null,
-              release_notes: '',
-              size_bytes: null,
-              downloaded_bytes: 0,
-              total_bytes: null,
-              error: null,
-              can_install: true,
-              eligibility_message: 'Synthetic installed fixture',
-              approval_token: null,
-              metadata_verified: true,
-              last_checked_at: 1700000000,
-            };
-          if (cmd === 'snapshot')
-            return structuredClone({
-              game,
-              mods: [mod],
-              backups: [],
-              recovery: [],
-              data_path: 'C:/SyntheticData',
-              storage_bytes: 0,
-              archive_bytes: 0,
-              backup_bytes: 0,
-              inventory: null,
-            });
-          if (cmd === 'scan_installed')
-            return {
-              game_path: game.path,
-              scanned_at: 1700000000,
-              elapsed_ms: 1,
-              visited_files: 1,
-              visited_entries: 1,
-              bytes_read: 0,
-              hashed_bytes: 0,
-              complete: true,
-              stale: false,
-              skipped: 0,
-              warnings: [],
-              items: [],
-              managed: [],
-            };
-          if (cmd === 'organization_snapshot') return structuredClone(org);
-          if (cmd === 'detect_games') return [];
-          if (cmd === 'save_collection') {
-            const previous = org.collections.find((c) => c.id === args.id);
-            const next = {
-              ...collection,
-              id: args.id ?? 'custom-created',
-              name: args.name,
-              description: args.description,
-              category: args.category,
-              automatic: false,
-              relationship: 'User-selected references',
-              members: args.members.map((r: any) =>
-                org.available_members.find(
-                  (m) => m.reference.kind === r.kind && m.reference.id === r.id,
-                ),
-              ),
-              unique_files: 1,
-            };
-            if (previous) Object.assign(previous, next);
-            else org.collections.push(next);
-            return next.id;
-          }
-          if (cmd === 'remove_collection') {
-            org.collections = org.collections.filter((c) => c.id !== args.id);
-            return;
-          }
-          if (cmd === 'plugin:dialog|open') return 'C:/SyntheticArtwork/solar.png';
-          if (cmd === 'assign_preview') {
-            const target =
-              args.kind === 'suit'
-                ? org.suits.find((s) => s.id === args.id)
-                : org.collections.find((c) => c.id === args.id);
-            if (target) target.preview = args.path ? 'a'.repeat(64) : null;
-            return;
-          }
-          if (cmd === 'read_preview') {
-            const canvas = document.createElement('canvas');
-            canvas.width = 2;
-            canvas.height = 2;
-            const context = canvas.getContext('2d')!;
-            context.fillStyle = '#7342a4';
-            context.fillRect(0, 0, 2, 2);
-            return canvas.toDataURL('image/png');
-          }
-          if (cmd === 'rename_suit') {
-            const suit = org.suits.find((s) => s.id === args.id);
-            if (suit) {
-              suit.name = args.name;
-              suit.category = args.category;
-            }
-            return;
-          }
-          if (cmd === 'prepare_suit')
-            return {
-              token: 'reviewed-suit-token',
-              independent_scope: 'Solar Suit',
-              mod_id: mod.id,
-              operation: args.operation,
-              game,
-              files: [
-                {
-                  target: 'scripts/Solar.cs',
-                  size: 10,
-                  action: args.operation === 'disable' ? 'Remove' : 'Create',
-                  before_hash: 'fixture',
-                  after_hash: null,
-                },
-              ],
-              blockers: [],
-              warnings: ['Complete standalone package; installation state only.'],
-            };
-          if (cmd === 'apply_plan') {
-            w.suitApproval = args;
-            mod.status = mod.status === 'enabled' ? 'disabled' : 'enabled';
-            solar.status = mod.status;
-            collection.status = mod.status;
-            child.status = mod.status;
-            main.status = mod.status;
-            return {
-              id: 'synthetic-backup',
-              message: 'Synthetic suit transaction completed',
-              files: ['scripts/Solar.cs'],
-            };
-          }
-          throw new Error('Unexpected synthetic command ' + cmd);
+import { test, expect } from '@playwright/test';
+import { bridge } from './fixtures/organization-bridge';
+
+test('missing custom collection members can be removed individually without file operations', async ({
+  page,
+}) => {
+  await bridge(page);
+  await page.addInitScript(() => {
+    const org = (window as any).organizationState;
+    const base = org.collections[0];
+    org.collections.push({
+      ...base,
+      id: 'missing-custom',
+      name: 'Old Collection',
+      automatic: false,
+      members: [
+        {
+          ...base.members[0],
+          reference: { kind: 'managed', id: 'missing-record' },
+          name: 'Missing old mod',
+          status: 'missing',
+          role: 'Missing referenced member',
+          mod_id: null,
+          files: [],
         },
-      };
-    },
-    { large },
-  );
-}
+      ],
+      missing_members: 1,
+    });
+  });
+  await page.goto('/');
+  await page.getByRole('button', { name: 'My Mods', exact: true }).click();
+  await page.getByRole('button', { name: 'View collection Old Collection' }).click();
+  await page.getByRole('button', { name: 'Edit collection', exact: true }).click();
+  const editor = page.getByRole('dialog', { name: 'Edit collection' });
+  await editor.getByRole('checkbox', { name: 'Include missing member missing-record' }).uncheck();
+  await editor.getByRole('button', { name: 'Save collection' }).click();
+  expect(
+    await page.evaluate(
+      () => (window as any).calls.findLast((c: any) => c.cmd === 'save_collection').args.members,
+    ),
+  ).toEqual([]);
+  expect(
+    await page.evaluate(() => (window as any).calls.some((c: any) => c.cmd === 'apply_plan')),
+  ).toBe(false);
+});
+
 test('package collections expand into canonical components and preserve individual library navigation', async ({
   page,
 }) => {
   await bridge(page);
   await page.goto('/');
-  await page.getByRole('button', { name: /^My library/ }).click();
+  await page.getByRole('button', { name: /^My Mods/ }).click();
   await expect(page.getByRole('button', { name: 'View collection Hero Collection' })).toBeVisible();
   await page.getByText('Components (2)', { exact: true }).click();
-  await expect(page.getByText('Independently manageable suit', { exact: true })).toBeVisible();
+  await expect(
+    page.getByRole('article').getByText('Independently manageable suit', { exact: true }),
+  ).toBeVisible();
   await page.getByRole('button', { name: 'View collection Hero Collection' }).click();
   await expect(page.getByRole('complementary', { name: 'Organization details' })).toContainText(
     'Imported archive and canonical package ownership',
@@ -295,7 +67,7 @@ test('custom collection create rename membership and remove never dispatch game 
 }) => {
   await bridge(page);
   await page.goto('/');
-  await page.getByRole('button', { name: /^My library/ }).click();
+  await page.getByRole('button', { name: /^My Mods/ }).click();
   await page.getByRole('button', { name: 'New collection' }).click();
   const editor = page.getByRole('dialog', { name: 'Create collection' });
   await editor.getByLabel('Collection name', { exact: true }).fill('Weekend Heroes');
@@ -329,10 +101,15 @@ test('suit filters grid list and right details explain protected OpenIV resource
   await page.goto('/');
   await page.getByRole('button', { name: 'Suits & Skins', exact: true }).click();
   await page.getByLabel('Suit category', { exact: true }).selectOption('Other / Unidentified');
-  await page.getByRole('button', { name: 'View suit Resource: unknown_uppr.ydd' }).click();
-  const detail = page.getByRole('complementary', { name: 'Organization details' });
+  await expect(
+    page.getByRole('button', { name: 'View suit Resource: unknown_uppr.ydd' }),
+  ).toHaveCount(0);
+  await page.getByRole('button', { name: 'Unidentified Files', exact: true }).click();
+  await page.getByRole('button', { name: /unknown_uppr.ydd/ }).click();
+  const detail = page.getByRole('complementary', { name: 'Unidentified file details' });
   await expect(detail).toContainText('Shared RPF contents');
-  await expect(detail.getByRole('button', { name: 'Review disable suit' })).toBeDisabled();
+  await expect(detail.getByRole('button', { name: 'Review disable suit' })).toHaveCount(0);
+  await page.getByRole('button', { name: 'Suits & Skins', exact: true }).click();
   await page.getByRole('button', { name: 'List view', exact: true }).click();
   await expect(page.locator('.org-items')).toHaveClass(/list/);
   await page.getByLabel('Suit category', { exact: true }).selectOption('Superhero Suits');
@@ -366,18 +143,18 @@ test('individual suit control requires the existing explicit operation approvals
     ownershipReviewed: true,
   });
 });
-test('assigned local preview is lazy-loaded and labeling does not unlock unsafe controls', async ({
+test('assigned local preview is lazy-loaded and label editing preserves control availability', async ({
   page,
 }) => {
   await bridge(page);
   await page.goto('/');
   await page.getByRole('button', { name: 'Suits & Skins', exact: true }).click();
-  await page.getByRole('button', { name: 'View suit Resource: unknown_uppr.ydd' }).click();
+  await page.getByRole('button', { name: 'View suit Solar Suit' }).click();
   const detail = page.getByRole('complementary', { name: 'Organization details' });
   await detail.getByRole('button', { name: 'Assign preview' }).click();
   await detail.locator('.org-thumbnail').scrollIntoViewIfNeeded();
   await expect(
-    detail.getByRole('img', { name: 'Resource: unknown_uppr.ydd — assigned preview', exact: true }),
+    detail.getByRole('img', { name: 'Solar Suit — assigned preview', exact: true }),
   ).toBeVisible();
   await detail.getByRole('button', { name: 'Edit label/category' }).click();
   const edit = page.getByRole('dialog', { name: 'Edit suit details' });
@@ -385,7 +162,7 @@ test('assigned local preview is lazy-loaded and labeling does not unlock unsafe 
   await edit.getByLabel('Suit editor category').selectOption('Civilian Outfits');
   await edit.getByRole('button', { name: 'Save suit details' }).click();
   await expect(detail).toContainText('My Unverified Outfit');
-  await expect(detail.getByRole('button', { name: 'Review disable suit' })).toBeDisabled();
+  await expect(detail.getByRole('button', { name: 'Review disable suit' })).toBeEnabled();
   const assigned = await page.evaluate(() =>
     (window as any).calls.find((c: any) => c.cmd === 'assign_preview'),
   );
@@ -419,7 +196,7 @@ test('collections and suits fit the minimum window and expose no invented previe
   await page.goto('/');
   await page.getByRole('button', { name: 'Suits & Skins', exact: true }).click();
   await expect(page.getByRole('button', { name: 'View suit Solar Suit' })).toBeVisible();
-  await expect(page.getByText('No preview assigned').first()).toBeVisible();
+  await expect(page.getByText('Superhero Suits · original placeholder').first()).toBeVisible();
   expect(await page.evaluate(() => document.documentElement.scrollWidth <= window.innerWidth)).toBe(
     true,
   );
@@ -427,7 +204,7 @@ test('collections and suits fit the minimum window and expose no invented previe
   await page.setViewportSize({ width: 1320, height: 880 });
   await page.getByRole('button', { name: 'View suit Solar Suit' }).click();
   await page.screenshot({ path: 'test-results/suits-synthetic-details.png', fullPage: true });
-  await page.getByRole('button', { name: /^My library/ }).click();
+  await page.getByRole('button', { name: /^My Mods/ }).click();
   await page.getByRole('button', { name: 'View collection Hero Collection' }).click();
   await page.screenshot({ path: 'test-results/collections-synthetic-details.png', fullPage: true });
 });

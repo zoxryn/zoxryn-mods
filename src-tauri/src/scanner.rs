@@ -52,6 +52,10 @@ pub fn scan(game: &Game, owners: &HashMap<String, String>) -> Result<ScanInvento
     let mut files = Vec::new();
     let mut dirs = Vec::new();
     walk(root, "", 0, &mut files, &mut dirs, &mut result)?;
+    // Prefix lookup makes bounded package metadata inspection O(log n + children),
+    // rather than walking the entire inventory for every manifest.
+    let mut package_paths: Vec<_> = files.iter().map(|file| file.path.as_str()).collect();
+    package_paths.sort_unstable();
     let all: HashSet<_> = files.iter().map(|f| f.path.to_lowercase()).collect();
     if all.len() != files.len() {
         result.complete = false;
@@ -347,6 +351,81 @@ pub fn scan(game: &Game, owners: &HashMap<String, String>) -> Result<ScanInvento
                 Err(e) => item.notes.push(format!("Ped metadata unavailable: {e}")),
             }
         }
+        if lower.ends_with("/zoxryn.json") && file.size <= 256 * 1024 && file.size + 1 <= budget {
+            let evidence = (|| -> Result<crate::grouping::PackageEvidence> {
+                use std::io::Read;
+                let path_on_disk = target(root, path)?;
+                let _guard = guard_existing_tree(path_on_disk.parent().unwrap())?;
+                let mut bytes = Vec::new();
+                open_read_no_follow(&path_on_disk)?
+                    .take(file.size + 1)
+                    .read_to_end(&mut bytes)?;
+                budget = budget.saturating_sub(bytes.len() as u64);
+                if bytes.len() as u64 != file.size {
+                    bail!("Package metadata changed during scan");
+                }
+                let mut manifest: Manifest = serde_json::from_slice(&bytes)?;
+                let package_root = path.rsplit_once('/').unwrap().0;
+                let prefix = format!("{package_root}/");
+                let start = package_paths.partition_point(|path| *path < prefix.as_str());
+                let paths: Vec<_> = package_paths[start..]
+                    .iter()
+                    .take_while(|path| path.starts_with(&prefix))
+                    .filter_map(|path| path.strip_prefix(&prefix).map(str::to_string))
+                    .collect();
+                manifest.organization.validate(&paths)?;
+                let name = crate::organization::clean_name(&manifest.name)?;
+                if !manifest.category.is_empty() {
+                    crate::organization::clean_name(&manifest.category)?;
+                }
+                if !manifest.version.is_empty() {
+                    crate::organization::clean_name(&manifest.version)?;
+                }
+                if manifest.requirements.len() > 64
+                    || manifest.requirements.iter().any(|id| {
+                        id.is_empty()
+                            || id.len() > 64
+                            || !id
+                                .chars()
+                                .all(|c| c.is_ascii_alphanumeric() || "_-".contains(c))
+                    })
+                {
+                    bail!("Package dependency metadata exceeds its bounded identifier format");
+                }
+                for suit in &mut manifest.organization.suits {
+                    if let Some(preview) = &mut suit.preview {
+                        *preview = format!("{prefix}{preview}");
+                    }
+                    for file in &mut suit.files {
+                        *file = format!("{prefix}{file}");
+                    }
+                }
+                Ok(crate::grouping::PackageEvidence {
+                    root: package_root.into(),
+                    name,
+                    category: manifest.category,
+                    version: manifest.version,
+                    preview: manifest
+                        .organization
+                        .preview
+                        .map(|p| format!("{prefix}{p}")),
+                    suits: manifest.organization.suits,
+                    requirements: manifest.requirements,
+                })
+            })();
+            match evidence {
+                Ok(package) => {
+                    item.dependencies.extend(package.requirements.clone());
+                    item.dependencies.sort();
+                    item.dependencies.dedup();
+                    item.package_evidence = Some(package);
+                    item.notes.push("Bounded explicit local package metadata; visual associations only, no ownership or safe toggling inferred.".into());
+                }
+                Err(error) => item
+                    .notes
+                    .push(format!("Package metadata not accepted: {error}")),
+            }
+        }
         for dependency in &item.dependencies {
             if !game
                 .prerequisites
@@ -406,6 +485,7 @@ fn base(game: &Game, path: &str, kind: &str, source: &str, confidence: &str) -> 
         managed_id: None,
         rpf: None,
         character_models: vec![],
+        package_evidence: None,
     }
 }
 fn warn(result: &mut ScanInventory, message: &str) {

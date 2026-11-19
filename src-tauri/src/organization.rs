@@ -162,6 +162,25 @@ pub struct OrganizationSnapshot {
     pub suits: Vec<Suit>,
     pub available_members: Vec<Component>,
     pub warnings: Vec<String>,
+    #[serde(default)]
+    pub candidates: Vec<Suit>,
+    #[serde(default)]
+    pub unidentified: Vec<Component>,
+    #[serde(default)]
+    pub health: HealthReport,
+}
+#[derive(Debug, Clone, Default, Serialize, Deserialize)]
+pub struct HealthReport {
+    pub checked_at: u64,
+    pub complete: bool,
+    pub issues: Vec<HealthIssue>,
+    pub compatibility: String,
+}
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct HealthIssue {
+    pub severity: String,
+    pub subject: String,
+    pub detail: String,
 }
 
 pub fn aggregate_status<'a>(statuses: impl IntoIterator<Item = &'a str>) -> String {

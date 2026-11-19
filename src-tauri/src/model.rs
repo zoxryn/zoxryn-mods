@@ -158,6 +158,8 @@ pub struct DiscoveredMod {
     pub rpf: Option<RpfSummary>,
     #[serde(default)]
     pub character_models: Vec<String>,
+    #[serde(default)]
+    pub package_evidence: Option<crate::grouping::PackageEvidence>,
 }
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct ManagedInstalled {

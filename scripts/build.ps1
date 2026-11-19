@@ -16,6 +16,9 @@ try {
     if (!$TestsOnly) {
         & node --test (Join-Path $project 'tests/public-source-audit.test.mjs')
         if($LASTEXITCODE){throw 'Public-source audit regression failed'}
+        $python=[IO.Path]::GetFullPath((Join-Path (Split-Path -Parent (Split-Path -Parent (Get-Command node).Source)) '../python/python.exe'))
+        & $python -m unittest discover -s tests -p release_automation_test.py
+        if($LASTEXITCODE){throw 'Release automation policy tests failed'}
         $pnpm = Get-Command pnpm -ErrorAction SilentlyContinue
         $pnpmScript = Join-Path (Split-Path -Parent (Split-Path -Parent (Get-Command node).Source)) 'node_modules\pnpm\bin\pnpm.cjs'
         function Invoke-Pnpm {

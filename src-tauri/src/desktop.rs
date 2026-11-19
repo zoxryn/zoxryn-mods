@@ -4,7 +4,7 @@ use std::{
     sync::{Arc, Mutex},
 };
 use tauri::{Manager, State};
-#[cfg(not(feature = "updater-qa"))]
+#[cfg(not(any(feature = "updater-qa", feature = "ui-qa")))]
 use zoxryn_core::game;
 use zoxryn_core::{model::*, scanner, Engine};
 type Shared = Arc<Mutex<Engine>>;
@@ -33,11 +33,11 @@ async fn snapshot(state: State<'_, Shared>) -> Result<Snapshot, String> {
 }
 #[tauri::command]
 async fn detect_games() -> Result<Vec<Game>, String> {
-    #[cfg(feature = "updater-qa")]
+    #[cfg(any(feature = "updater-qa", feature = "ui-qa"))]
     {
         Ok(vec![])
     }
-    #[cfg(not(feature = "updater-qa"))]
+    #[cfg(not(any(feature = "updater-qa", feature = "ui-qa")))]
     {
         tauri::async_runtime::spawn_blocking(game::detect)
             .await
@@ -50,10 +50,14 @@ async fn select_game(
     path: String,
     launcher: String,
 ) -> Result<Game, String> {
+    #[cfg(feature = "ui-qa")]
+    crate::ui_qa::validate_path(Path::new(&path)).map_err(|e| e.to_string())?;
     run(state, move |e| e.select_game(Path::new(&path), &launcher)).await
 }
 #[tauri::command]
 async fn import_archive(state: State<'_, Shared>, path: String) -> Result<ModRecord, String> {
+    #[cfg(feature = "ui-qa")]
+    crate::ui_qa::validate_path(Path::new(&path)).map_err(|e| e.to_string())?;
     run(state, move |e| e.import(Path::new(&path))).await
 }
 #[tauri::command]
@@ -103,6 +107,39 @@ async fn organization_snapshot(
     run(state, |e| e.organization_snapshot()).await
 }
 #[tauri::command]
+async fn mod_health_check(
+    state: State<'_, Shared>,
+) -> Result<zoxryn_core::organization::HealthReport, String> {
+    run(state, |e| e.mod_health_check()).await
+}
+#[tauri::command]
+async fn save_virtual_group(
+    state: State<'_, Shared>,
+    id: String,
+    name: String,
+    category: String,
+    members: Vec<zoxryn_core::organization::MemberRef>,
+    confirmed: bool,
+) -> Result<(), String> {
+    run(state, move |e| {
+        e.save_virtual_group(&id, &name, &category, &members, confirmed)
+    })
+    .await
+}
+#[tauri::command]
+async fn confirm_skin_identity(
+    state: State<'_, Shared>,
+    id: String,
+    name: String,
+    category: String,
+    confirmed: bool,
+) -> Result<(), String> {
+    run(state, move |e| {
+        e.confirm_skin_identity(&id, &name, &category, confirmed)
+    })
+    .await
+}
+#[tauri::command]
 async fn save_collection(
     state: State<'_, Shared>,
     id: Option<String>,
@@ -128,6 +165,10 @@ async fn assign_preview(
     path: Option<String>,
 ) -> Result<(), String> {
     run(state, move |e| {
+        #[cfg(feature = "ui-qa")]
+        if let Some(path) = &path {
+            crate::ui_qa::validate_path(Path::new(path))?;
+        }
         e.assign_preview(&kind, &id, path.as_deref().map(Path::new))
     })
     .await
@@ -225,11 +266,19 @@ fn open_official(id: String) -> Result<(), String> {
     Ok(())
 }
 pub fn run_app() {
+    #[cfg(feature = "ui-qa")]
+    crate::ui_qa::start();
     let result = tauri::Builder::default()
+        .on_page_load(|_window, _payload| {
+            #[cfg(feature = "ui-qa")]
+            if _payload.event() == tauri::webview::PageLoadEvent::Finished {
+                let _ = crate::ui_qa::record_page_load();
+            }
+        })
         .plugin(tauri_plugin_dialog::init())
         .plugin(tauri_plugin_updater::Builder::new().build())
         .setup(|app| {
-            #[cfg(not(feature = "updater-qa"))]
+            #[cfg(not(any(feature = "updater-qa", feature = "ui-qa")))]
             let data = {
                 let args: Vec<_> = std::env::args_os().collect();
                 if let Some(i) = args.iter().position(|a| a == "--data-dir") {
@@ -240,6 +289,8 @@ pub fn run_app() {
             };
             #[cfg(feature = "updater-qa")]
             let data = crate::updater_qa::root()?.join("data");
+            #[cfg(feature = "ui-qa")]
+            let data = crate::ui_qa::data()?;
             let engine = match Engine::open(&data) {
                 Ok(e) => e,
                 Err(e) => {
@@ -279,6 +330,9 @@ pub fn run_app() {
             scan_installed,
             prepare_adoption,
             organization_snapshot,
+            mod_health_check,
+            save_virtual_group,
+            confirm_skin_identity,
             save_collection,
             remove_collection,
             assign_preview,

@@ -1,6 +1,7 @@
 use super::*;
 use crate::{organization::*, previews, scanner};
 use std::collections::{BTreeMap, HashSet};
+mod discoveries;
 
 #[derive(Default, Serialize, Deserialize)]
 #[serde(default)]
@@ -8,6 +9,9 @@ struct Visual {
     preview: Option<String>,
     name: Option<String>,
     category: Option<String>,
+    confirmed_identity: bool,
+    members: Option<Vec<MemberRef>>,
+    relationship_confirmed: bool,
 }
 #[derive(Serialize, Deserialize)]
 struct Custom {
@@ -28,6 +32,112 @@ fn normalized_status(status: &str) -> String {
 }
 fn file_key(file: &str) -> String {
     file.split(" :: ").next().unwrap_or(file).to_lowercase()
+}
+fn missing_component(reference: MemberRef) -> Component {
+    Component {reference,name:"Missing component".into(),category:"Unknown".into(),status:"missing".into(),source:"Unknown".into(),location:String::new(),files:vec![],dependencies:vec![],role:"Unavailable reference".into(),control_reason:"The reference is retained for reconciliation; remove it individually in the collection editor if desired.".into(),mod_id:None,preview:None}
+}
+fn unique_file_count(
+    members: &[Component],
+    roots: &HashMap<String, String>,
+    external_root: &str,
+) -> usize {
+    members
+        .iter()
+        .filter(|member| member.role != "Shared dependency reference")
+        .flat_map(|member| {
+            let scope = member
+                .mod_id
+                .as_ref()
+                .and_then(|id| roots.get(id))
+                .map(String::as_str)
+                .unwrap_or(external_root);
+            member
+                .files
+                .iter()
+                .map(move |file| (scope.to_string(), file_key(file)))
+        })
+        .collect::<HashSet<_>>()
+        .len()
+}
+
+// Resolve virtual child references after all metadata overrides. This never
+// changes scanner evidence, physical paths, ownership or transaction records.
+fn refresh_child_links(
+    index: usize,
+    collections: &mut [Collection],
+    ids: &HashMap<String, usize>,
+    roots: &HashMap<String, String>,
+    external_root: &str,
+    state: &mut [u8],
+    depth: usize,
+) -> bool {
+    if state[index] == 2 {
+        return true;
+    }
+    if state[index] == 1 || depth > 32 {
+        return false;
+    }
+    state[index] = 1;
+    let children: Vec<_> = collections[index]
+        .members
+        .iter()
+        .enumerate()
+        .filter_map(|(member_index, member)| {
+            if member.reference.kind == "collection" {
+                ids.get(&member.reference.id)
+                    .map(|child| (member_index, *child))
+            } else {
+                None
+            }
+        })
+        .collect();
+    let mut complete = true;
+    for (member_index, child_index) in children {
+        if !refresh_child_links(
+            child_index,
+            collections,
+            ids,
+            roots,
+            external_root,
+            state,
+            depth + 1,
+        ) {
+            complete = false;
+            continue;
+        }
+        let child = &collections[child_index];
+        let files = child
+            .members
+            .iter()
+            .filter(|member| member.role != "Shared dependency reference")
+            .flat_map(|member| member.files.clone())
+            .collect::<std::collections::BTreeSet<_>>()
+            .into_iter()
+            .collect();
+        let summary = (
+            child.name.clone(),
+            child.category.clone(),
+            child.status.clone(),
+            child.preview.clone(),
+            files,
+        );
+        let member = &mut collections[index].members[member_index];
+        member.name = summary.0;
+        member.category = summary.1;
+        member.status = summary.2;
+        member.preview = summary.3;
+        member.files = summary.4;
+    }
+    collections[index].unique_files =
+        unique_file_count(&collections[index].members, roots, external_root);
+    collections[index].status = aggregate_status(
+        collections[index]
+            .members
+            .iter()
+            .map(|member| member.status.as_str()),
+    );
+    state[index] = 2;
+    complete
 }
 
 impl Engine {
@@ -141,9 +251,15 @@ impl Engine {
         }
         let owned = self.ownership(&record.id)?;
         if owned.len() != operative.len()
-            || owned.iter().any(|o| o.original_hash.is_some() || o.original_blob.is_some() || o.adopted
-                || record.game_path.as_deref() != Some(o.game.as_str())
-                || !record.files.iter().any(|f| f.target.eq_ignore_ascii_case(&o.target) && f.hash == o.installed_hash))
+            || owned.iter().any(|o| {
+                o.original_hash.is_some()
+                    || o.original_blob.is_some()
+                    || o.adopted
+                    || record.game_path.as_deref() != Some(o.game.as_str())
+                    || !record.files.iter().any(|f| {
+                        f.target.eq_ignore_ascii_case(&o.target) && f.hash == o.installed_hash
+                    })
+            })
         {
             return Ok(Some("Original replacements or incomplete ownership prevent safe individual suit management.".into()));
         }
@@ -152,6 +268,24 @@ impl Engine {
     pub fn organization_snapshot(&self) -> Result<OrganizationSnapshot> {
         let records = self.records()?;
         let inventory = self.inventory()?;
+        // Display-only identity. Canonical ownership and transaction keys stay unchanged.
+        let roots: HashMap<String, String> = records
+            .iter()
+            .map(|record| {
+                (
+                    record.id.clone(),
+                    record
+                        .game_path
+                        .as_ref()
+                        .map(|p| p.replace('\\', "/").to_lowercase())
+                        .unwrap_or_else(|| format!("package:{}", record.id)),
+                )
+            })
+            .collect();
+        let external_root = inventory
+            .as_ref()
+            .map(|i| i.game_path.replace('\\', "/").to_lowercase())
+            .unwrap_or_default();
         let mut output = OrganizationSnapshot::default();
         let mut available = BTreeMap::<String, Component>::new();
         let mut collections = Vec::new();
@@ -178,11 +312,7 @@ impl Engine {
             }
             let id = format!("package:{}", record.id);
             let override_visual = self.visual("collection", &id)?;
-            let unique_files = members
-                .iter()
-                .flat_map(|m| m.files.iter().map(|f| file_key(f)))
-                .collect::<HashSet<_>>()
-                .len();
+            let unique_files = unique_file_count(&members, &roots, &external_root);
             collections.push(Collection{id,name:override_visual.name.unwrap_or_else(||record.organization.collection_name.clone().unwrap_or_else(||record.name.clone())),description:"One imported package and its explicitly declared components; file ownership is retained by its original mod record.".into(),category:override_visual.category.unwrap_or_else(||record.category.clone()),automatic:true,relationship:"Imported archive and canonical package ownership".into(),status:aggregate_status(members.iter().map(|m|m.status.as_str())),preview:override_visual.preview.or_else(||members[0].preview.clone()),members,unique_files,missing_members:0});
         }
         if let Some(inventory) = &inventory {
@@ -343,17 +473,98 @@ impl Engine {
                 }
             }
             for (_, mut collection) in external_collections {
-                collection.unique_files = collection
-                    .members
-                    .iter()
-                    .flat_map(|m| m.files.iter().map(|f| file_key(f)))
-                    .collect::<HashSet<_>>()
-                    .len();
+                collection.unique_files =
+                    unique_file_count(&collection.members, &roots, &external_root);
                 collection.status =
                     aggregate_status(collection.members.iter().map(|m| m.status.as_str()));
                 collections.push(collection);
             }
+            self.organize_discoveries(inventory, &mut collections, &mut available, &mut output)?;
         }
+        for collection in &mut collections {
+            let visual = self.visual("collection", &collection.id)?;
+            if let Some(refs) = visual.members {
+                collection.members = refs
+                    .into_iter()
+                    .map(|reference| {
+                        available
+                            .get(&format!("{}:{}", reference.kind, reference.id))
+                            .cloned()
+                            .unwrap_or_else(|| missing_component(reference))
+                    })
+                    .collect();
+                collection.relationship = if visual.relationship_confirmed {
+                    "Manually confirmed visual relationships; ownership and compatibility unchanged"
+                } else {
+                    "Manually corrected virtual membership; not installation authority"
+                }
+                .into();
+            }
+            if let Some(name) = visual.name {
+                collection.name = name;
+            }
+            if let Some(category) = visual.category {
+                collection.category = category;
+            }
+            if let Some(preview) = visual.preview {
+                collection.preview = Some(preview);
+            }
+            collection.category = crate::grouping::display_category(&collection.category);
+            if collection.category != "Tools & Dependencies" {
+                for member in &mut collection.members {
+                    if crate::grouping::dependency(&member.location).is_some() {
+                        member.role = "Shared dependency reference".into();
+                    }
+                }
+            }
+            collection.unique_files =
+                unique_file_count(&collection.members, &roots, &external_root);
+            collection.missing_members = collection
+                .members
+                .iter()
+                .filter(|m| m.status == "missing")
+                .count();
+            collection.status =
+                aggregate_status(collection.members.iter().map(|m| m.status.as_str()));
+        }
+        let mut gallery = Vec::new();
+        for mut suit in std::mem::take(&mut output.suits) {
+            let visual = self.visual("suit", &suit.id)?;
+            if suit.mod_id.is_some()
+                || suit
+                    .notes
+                    .iter()
+                    .any(|n| n.starts_with("Explicit external package declaration"))
+                || visual.confirmed_identity
+            {
+                if visual.confirmed_identity {
+                    suit.notes.push("Identity manually confirmed by the user. Compatibility, registration and safe controls remain separately unverified.".into());
+                }
+                gallery.push(suit);
+            } else {
+                if let Some(component) = available.get_mut(&format!("suit:{}", suit.id)) {
+                    component.role = "Unidentified resource; Advanced File Inspector only".into();
+                }
+                output.candidates.push(suit);
+            }
+        }
+        output.suits = gallery;
+        let named_loose_files: HashSet<_> = output
+            .suits
+            .iter()
+            .filter(|suit| {
+                suit.notes
+                    .iter()
+                    .any(|note| note.starts_with("Explicit external package declaration"))
+            })
+            .flat_map(|suit| suit.files.iter().map(|file| file.to_lowercase()))
+            .collect();
+        output.candidates.retain(|candidate| {
+            candidate.files.is_empty()
+                || !candidate.files.iter().all(|file| {
+                    !file.contains(" :: ") && named_loose_files.contains(&file.to_lowercase())
+                })
+        });
         let mut stmt = self
             .db
             .prepare("SELECT id,json FROM collections ORDER BY rowid")?;
@@ -376,11 +587,7 @@ impl Engine {
                 .collect::<rusqlite::Result<Vec<_>>>()?;
             let mut missing = 0;
             let members=refs.into_iter().map(|reference|{available.get(&format!("{}:{}",reference.kind,reference.id)).cloned().unwrap_or_else(||{missing+=1;Component{reference,name:"Missing component".into(),category:"Unknown".into(),status:"missing".into(),source:"Unknown".into(),location:String::new(),files:vec![],dependencies:vec![],role:"Unavailable reference".into(),control_reason:"The reference was retained. Rescan or edit this collection to reconcile it.".into(),mod_id:None,preview:None}})}).collect::<Vec<_>>();
-            let unique_files = members
-                .iter()
-                .flat_map(|m| m.files.iter().map(|f| file_key(f)))
-                .collect::<HashSet<_>>()
-                .len();
+            let unique_files = unique_file_count(&members, &roots, &external_root);
             collections.push(Collection {
                 id,
                 name: custom.name,
@@ -396,6 +603,59 @@ impl Engine {
                 missing_members: missing,
             });
         }
+        let ids: HashMap<_, _> = collections
+            .iter()
+            .enumerate()
+            .map(|(index, collection)| (collection.id.clone(), index))
+            .collect();
+        let mut state = vec![0; collections.len()];
+        for index in 0..collections.len() {
+            if !refresh_child_links(
+                index,
+                &mut collections,
+                &ids,
+                &roots,
+                &external_root,
+                &mut state,
+                0,
+            ) {
+                output.warnings.push("A cyclic or over-deep virtual collection reference was retained for review; no file operation was authorized.".into());
+            }
+        }
+        for collection in &collections {
+            if let Some(reference) = available.get_mut(&format!("collection:{}", collection.id)) {
+                reference.name = collection.name.clone();
+                reference.category = collection.category.clone();
+                reference.status = collection.status.clone();
+                reference.preview = collection.preview.clone();
+                reference.files = collection
+                    .members
+                    .iter()
+                    .filter(|member| member.role != "Shared dependency reference")
+                    .flat_map(|member| member.files.clone())
+                    .collect::<std::collections::BTreeSet<_>>()
+                    .into_iter()
+                    .collect();
+            }
+        }
+        let assigned: HashSet<_> = collections
+            .iter()
+            .flat_map(|collection| {
+                collection
+                    .members
+                    .iter()
+                    .map(|member| member.reference.clone())
+            })
+            .collect();
+        // A manual virtual assignment resolves the library's parent relationship.
+        // The original scanner row remains in available_members and SQLite.
+        output.unidentified = available
+            .values()
+            .filter(|member| {
+                member.reference.kind == "external" && !assigned.contains(&member.reference)
+            })
+            .cloned()
+            .collect();
         output.collections = collections;
         output.available_members = available.into_values().collect();
         output
@@ -516,7 +776,12 @@ impl Engine {
     fn check_visual_target(&self, kind: &str, id: &str) -> Result<()> {
         let snapshot = self.organization_snapshot()?;
         if (kind == "collection" && snapshot.collections.iter().any(|c| c.id == id))
-            || (kind == "suit" && snapshot.suits.iter().any(|s| s.id == id))
+            || (kind == "suit"
+                && snapshot
+                    .suits
+                    .iter()
+                    .chain(snapshot.candidates.iter())
+                    .any(|s| s.id == id))
             || (kind == "managed"
                 && snapshot
                     .available_members
